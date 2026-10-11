@@ -1,4 +1,6 @@
 {
+  "name": "grocery-list-app-ui",
+  "framework": "vite",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]

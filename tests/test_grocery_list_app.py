@@ -59,6 +59,7 @@ class TestSpecAndWorkflowCompliance(unittest.TestCase):
         self.assertIn("--allow-unauthenticated", wf, "Must allow unauthenticated access")
         self.assertIn("--port 8080", wf, "Must specify --port 8080")
         self.assertIn("--source", wf, "Must use source type deployment")
+        self.assertIn("npm install", wf, "Must use npm install instead of npm ci to handle environments without lockfiles")
 
         # Crucial Cloud Run rule: NEVER pass PORT in --set-env-vars
         self.assertNotIn("PORT=", wf.split("--set-env-vars")[1].split("\n")[0] if "--set-env-vars" in wf else "",
@@ -70,6 +71,28 @@ class TestSpecAndWorkflowCompliance(unittest.TestCase):
             wf = f.read()
 
         self.assertIn("noam-projects2", wf, "Vercel team/scope must be noam-projects2")
+        self.assertIn("grocery-list-app-ui", wf, "Vercel project name must be grocery-list-app-ui")
+        self.assertIn("npm install", wf, "Must use npm install instead of npm ci")
+        self.assertNotIn("vercel pull", wf, "Must not use vercel pull requiring unconfigured org/project id secrets")
+
+    def test_backend_dockerfile_and_gcloudignore(self):
+        dockerfile = os.path.join(self.root_dir, "backend", "Dockerfile")
+        gcloudignore = os.path.join(self.root_dir, "backend", ".gcloudignore")
+        self.assertTrue(os.path.exists(dockerfile), "backend/Dockerfile must exist for container build fallback")
+        self.assertTrue(os.path.exists(gcloudignore), "backend/.gcloudignore must exist")
+
+        with open(dockerfile, "r", encoding="utf-8") as f:
+            df = f.read()
+        self.assertIn("EXPOSE 8080", df)
+        self.assertIn("dist/server.js", df)
+
+    def test_vercel_project_configuration(self):
+        vercel_json = os.path.join(self.root_dir, "frontend", "vercel.json")
+        self.assertTrue(os.path.exists(vercel_json), "frontend/vercel.json must exist")
+        with open(vercel_json, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(data.get("name"), "grocery-list-app-ui")
+
 
 
 class MockInMemoryStore:

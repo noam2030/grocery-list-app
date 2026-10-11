@@ -458,18 +458,38 @@ interface GroceryItem {
 - **GCP Project ID**: `ai-learning-499409`
 - **Region**: `us-central1`
 - **Authentication**: Unauthenticated (`--allow-unauthenticated`)
-- **Port**: `--port 8080`
-- **Deployment Mode**: Source deployment (`--source .` or `--source ./backend`)
-- **Secret**: `GCP_SA_KEY`
+- **Port**: `--port 8080` (Configured solely via flag; `PORT` is never passed to `--set-env-vars`)
+- **Deployment Mode**: Source deployment (`gcloud run deploy grocery-list-app-api --source . ...` executed inside `./backend`)
+- **Secret**: `GCP_SA_KEY` (Google Cloud Service Account JSON)
 - **GitHub Actions Workflow**: `.github/workflows/deploy-backend.yml`
-  - Trigger: `push` to `main` branch matching `backend/**`.
+  - Trigger: `push` to `main` branch matching `backend/**` or workflow file, plus `workflow_dispatch`.
   - Condition: `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`
+  - Dependency Installation: Uses `npm install` (avoiding `npm ci` failures due to uncommitted lockfiles)
+  - Containerization & Source Build: Provides multi-stage `Dockerfile` and `.gcloudignore` so Google Cloud Build / Cloud Run builds cleanly without buildpack tool mismatches. `package.json` includes `typescript` in `dependencies` and provides both `"build": "tsc"` and `"gcp-build": "tsc"`.
 
 ### Vercel (Frontend UI)
 - **Project Name**: `grocery-list-app-ui`
 - **Scope / Team**: `noam-projects2`
-- **Secret**: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
+- **Secret**: `VERCEL_TOKEN` (Only `VERCEL_TOKEN` is required; `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` are not needed)
 - **GitHub Actions Workflow**: `.github/workflows/deploy-frontend.yml`
-  - Trigger: `push` to `main` branch matching `frontend/**`.
-  - Injects `VITE_API_URL` pointing to Cloud Run backend.
-  - Builds and deploys using Vercel CLI (`vercel deploy --prod --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }} --yes`).
+  - Trigger: `push` to `main` branch matching `frontend/**` or workflow file, plus `workflow_dispatch`.
+  - Condition: `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`
+  - Dependency Installation: Uses `npm install` (avoiding `npm ci` failures due to uncommitted lockfiles)
+  - Deployment Command: Direct non-interactive CLI deployment:
+    `vercel deploy --prod --project grocery-list-app-ui --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }} --yes`
+  - Avoids `vercel pull` and `--prebuilt` flows that require nonexistent `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` secrets.
+  - `vercel.json` and `package.json` explicitly define `"name": "grocery-list-app-ui"` and SPA routing rewrites to `/index.html`.
+
+### Root Cause Analysis & Deployment Hardening
+1. **Failure Cause 1: `npm ci` lockfile requirement in GitHub Actions**
+   - *Problem*: Workflows executed `npm ci` in environments without `package-lock.json`, causing immediate step failure.
+   - *Resolution*: Updated workflow steps to use `npm install`, which cleanly reads `package.json` dependencies.
+2. **Failure Cause 2: Missing Vercel Organization & Project ID Secrets**
+   - *Problem*: Frontend workflow used `vercel pull` with `${{ secrets.VERCEL_ORG_ID }}` and `${{ secrets.VERCEL_PROJECT_ID }}`. In repositories where only `VERCEL_TOKEN` is configured, `vercel pull` aborts.
+   - *Resolution*: Replaced `vercel pull` / `vercel build` / `vercel deploy --prebuilt` with direct `vercel deploy --prod --project grocery-list-app-ui --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }} --yes`.
+3. **Failure Cause 3: Cloud Run Buildpack TypeScript Pruning**
+   - *Problem*: In default Cloud Buildpacks, `typescript` in `devDependencies` is pruned or omitted when installing in production mode, leading to `tsc: command not found`.
+   - *Resolution*: Added `typescript` and type definitions into `backend/package.json` dependencies, added `"gcp-build": "tsc"`, created `.gcloudignore`, and added a production multi-stage `Dockerfile` in `backend/` for bulletproof Cloud Run source deployment.
+4. **Failure Cause 4: Cloud Run Reserved PORT Variable**
+   - *Rule*: Cloud Run forbids passing `PORT` in `--set-env-vars`. Only `--port 8080` is used, and the backend Express server binds to `process.env.PORT || 8080` on `0.0.0.0`.
+

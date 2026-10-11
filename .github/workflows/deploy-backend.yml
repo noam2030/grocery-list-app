@@ -23,12 +23,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
-          cache-dependency-path: 'backend/package.json'
 
       - name: Install Dependencies
         working-directory: ./backend
-        run: npm ci
+        run: npm install
 
       - name: Run Tests
         working-directory: ./backend
@@ -43,12 +41,12 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Deploy to Cloud Run from Source
+        working-directory: ./backend
         run: |
           gcloud run deploy grocery-list-app-api \
-            --source ./backend \
+            --source . \
             --project ai-learning-499409 \
             --region us-central1 \
-            --platform managed \
             --allow-unauthenticated \
             --port 8080 \
             --set-env-vars GCP_PROJECT_ID=ai-learning-499409,FIRESTORE_COLLECTION=grocery-list-app,NODE_ENV=production,CORS_ORIGIN=*

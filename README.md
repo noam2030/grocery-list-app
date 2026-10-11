@@ -197,24 +197,28 @@ npm run test --workspace=backend
 ## Deployment Instructions
 
 ### 1. Backend to Google Cloud Run:
-The backend deploys directly from source code to Google Cloud Run as a managed containerless service:
+The backend deploys directly from source code to Google Cloud Run:
 ```bash
+cd backend
 gcloud run deploy grocery-list-app-api \
-  --source ./backend \
+  --source . \
   --project ai-learning-499409 \
   --region us-central1 \
-  --platform managed \
   --allow-unauthenticated \
   --port 8080 \
   --set-env-vars GCP_PROJECT_ID=ai-learning-499409,FIRESTORE_COLLECTION=grocery-list-app,NODE_ENV=production,CORS_ORIGIN=*
 ```
-*Note: Cloud Run injects `$PORT` automatically; `--port 8080` specifies the container port.*
+*Note: Cloud Run injects `$PORT` automatically; `--port 8080` specifies the container port. `PORT` is never passed to `--set-env-vars`.*
 
 ### 2. Frontend to Vercel:
-The frontend deploys to Vercel under scope `noam-projects2`:
+The frontend deploys to Vercel targeting project `grocery-list-app-ui` under scope `noam-projects2`:
 ```bash
 cd frontend
-vercel deploy --prod --scope noam-projects2 --yes
+vercel deploy --prod --project grocery-list-app-ui --scope noam-projects2 --token $VERCEL_TOKEN --yes
 ```
 
-Automated deployments are configured in `.github/workflows/deploy-backend.yml` and `.github/workflows/deploy-frontend.yml`.
+### CI/CD Deployment Troubleshooting & Fixes:
+1. **GitHub Actions `npm ci` failures**: Fixed by running `npm install` across workflows to support environments without committed lockfiles.
+2. **Missing Vercel Org/Project ID Secrets**: Eliminated `vercel pull` and replaced with direct non-interactive `vercel deploy --prod --project grocery-list-app-ui --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }} --yes`.
+3. **Cloud Run Buildpack compilation**: Moved `typescript` to `dependencies` in `backend/package.json`, added `"gcp-build": "tsc"`, and provided a multi-stage `Dockerfile` and `.gcloudignore` for resilient source builds.
+

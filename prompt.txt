@@ -1,52 +1,53 @@
 # Master Project Specification: grocery-list-app
 
-You are tasked with building, testing, and deploying the complete, production-ready **grocery-list-app** from scratch. Follow this comprehensive master prompt specification strictly.
+You are tasked with building, testing, hardening, and deploying the complete, production-grade **grocery-list-app** from scratch. Follow this comprehensive master prompt specification strictly.
 
 ---
 
 ## 1. Development Methodology & Spec-First Workflow
 
-1. **Spec-First Mandate**: Before implementing application code, you must create and maintain an authoritative `SPEC.md` in the root directory.
+1. **Spec-First Mandate**: Before implementing application code or CI/CD pipelines, you must create and maintain an authoritative `SPEC.md` in the repository root directory.
 2. **Mandatory Sections**: `SPEC.md` must contain exactly these 12 sections with zero omissions:
-   1. **Overview**: Project purpose, target users, and core value proposition.
-   2. **Requirements**: Functional and non-functional requirements.
-   3. **User Experience**: Design system, visual hierarchy, user flows, responsive layouts, accessibility (WCAG AA).
-   4. **Architecture**: System architecture, directory layout, client-server communication, state management.
-   5. **Technology Stack**: Specific frameworks, libraries, versions, and justifications.
-   6. **Backend**: Server runtime, framework, routing structure, middleware, error handling, validation.
-   7. **Frontend**: UI framework, components, styling, client state, optimistic mutations, API client.
-   8. **Data Model**: Entities, Firestore collection structures, document schemas, field types, indexes.
-   9. **API**: REST endpoints, request/response payloads, query parameters, HTTP status codes, error models.
-   10. **Configuration**: Environment variables, ports, profiles, secrets management.
-   11. **Testing**: Unit tests, integration tests, E2E tests, mocking strategies, coverage goals.
-   12. **Deployment**: Target cloud environments, containerless source build commands, GitHub Actions workflows, hosting configs.
-3. **Spec Alignment**: Every file created, route implemented, UI interaction, and test suite must strictly reflect and conform to `SPEC.md`. Any design or architectural update must be recorded in `SPEC.md` first.
+   1. **Overview**: Project purpose, target users, core shopping workflows, and value proposition.
+   2. **Requirements**: Functional, non-functional, security, offline tolerance, and deployment requirements.
+   3. **User Experience**: Design system, visual hierarchy, mobile-first one-handed shopping flows, accessibility (WCAG 2.1 AA compliant), keyboard navigation, and theme system.
+   4. **Architecture**: System architecture, monorepo directory layout, client-server contract, error propagation, and state management.
+   5. **Technology Stack**: Specific frameworks, libraries, runtime versions, build tools, and justifications.
+   6. **Backend**: Server runtime, framework, routing structure, middleware (CORS, body parsing, request logging), validation schemas, Firestore integration, and resilient error handling.
+   7. **Frontend**: UI framework, components, styling, client state, optimistic mutations, API client, fallback states, and toast notifications.
+   8. **Data Model**: Entities, Firestore collection structures, document schemas, field types, default values, and indexing rules.
+   9. **API**: REST endpoints, request/response JSON payloads, query parameters, HTTP status codes, and standardized error schemas.
+   10. **Configuration**: Environment variables, runtime ports, profiles, secrets management, and local fallback strategies.
+   11. **Testing**: Unit tests, integration tests, mock strategies for Firestore, component tests, and test runner configurations.
+   12. **Deployment**: Target cloud environments, containerless source build commands, GitHub Actions workflows, build artifact layouts, Vercel project configuration, and Cloud Run troubleshooting/resilience practices.
+3. **Spec Alignment**: Every file created, route implemented, UI interaction, test suite, and CI/CD workflow step must strictly reflect and conform to `SPEC.md`. Any design or architectural update must be recorded in `SPEC.md` first.
 
 ---
 
 ## 2. Project Overview & Core Features
 
-**grocery-list-app** is a responsive, fast, intuitive grocery shopping and inventory management application.
+**grocery-list-app** is a responsive, fast, intuitive grocery shopping and inventory management application designed for seamless in-store mobile use and desktop planning.
 
 ### Key Capabilities:
 - **List & Item Management**:
   - Create, view, rename, and switch between multiple grocery lists (e.g., "Weekly Groceries", "Costco Run", "Dinner Party").
-  - Add items with name, quantity, unit (pcs, kg, lbs, pack, etc.), category, priority, and optional notes.
-  - Interactive item completion toggle (check off items as you shop) with visual strike-through and optional collapsible completed section.
-  - Edit item details inline or via modal.
+  - Auto-seed a default "Weekly Groceries" list when no lists exist.
+  - Add items with name, quantity, unit (pcs, kg, lbs, pack, bunch, gallons, etc.), category, priority (low, medium, high), and optional notes.
+  - Interactive item completion toggle (check off items as you shop) with visual strike-through and collapsible completed items section.
+  - Edit item details inline or via accessible modal/drawer.
   - Delete items individually or batch-clear completed items.
-  - Quick quantity stepper (`+` and `-`) for rapid shopping adjustments.
+  - Quick quantity stepper (`+` and `-`) for rapid in-aisle adjustments.
 - **Categorization & Filtering**:
   - Default categories with distinct color-coded badges and icons (Produce, Dairy & Eggs, Bakery, Meat & Seafood, Pantry, Frozen, Beverages, Household, Snacks, Other).
   - Ability to add custom categories.
   - Category grouping view (organizes the shopping list by supermarket aisles/sections).
-  - Search bar with instant real-time filtering by item name or note.
-  - Status filters: All, Active / Pending, Completed.
+  - Real-time search bar with instant filtering by item name or note.
+  - Status filters: `All`, `Active / Pending`, `Completed`.
   - Sorting options: By Category (Aisle order), Alphabetical (A-Z), Priority, Recently Added.
 - **User Experience & Responsiveness**:
   - Mobile-first, touch-friendly UI optimized for one-handed phone use in a grocery store aisle.
-  - Optimistic UI updates with toast notifications for actions and errors.
-  - Dark mode and light mode support with seamless toggle.
+  - Optimistic UI updates with toast notifications for actions, rollbacks, and network errors.
+  - Dark mode and light mode support with system preference detection and manual toggle.
 
 ---
 
@@ -54,76 +55,83 @@ You are tasked with building, testing, and deploying the complete, production-re
 
 ### Technology Stack:
 - **Frontend**:
-  - Framework: React 18+ with TypeScript using Vite or Next.js (App Router).
+  - Framework: React 18+ with TypeScript using Vite.
   - Styling: Tailwind CSS with Lucide React icons.
-  - State & Data Fetching: TanStack Query (React Query) or lightweight native fetch wrapper with optimistic cache updates.
+  - State & Data Fetching: TanStack Query (React Query) or custom hook with optimistic cache updates.
   - Hosting: Vercel (Scope / Team: `noam-projects2`, Project Name: `grocery-list-app-ui`).
 - **Backend**:
-  - Runtime: Node.js (TypeScript) with Express or Fastify (or Python 3.11+ with FastAPI).
+  - Runtime: Node.js 20+ (TypeScript) with Express.
   - Cloud Database: Google Cloud Firestore (`@google-cloud/firestore`).
-  - Validation: Zod (or Pydantic) for request body and query validation.
-  - Hosting: Google Cloud Run (Project: `ai-learning-499409`, Service Name: `grocery-list-app-api`).
+  - Validation: Zod for request body and query validation.
+  - Hosting: Google Cloud Run (Project: `ai-learning-499409`, Service Name: `grocery-list-app-api`, Region: `us-central1`).
 - **DevOps & CI/CD**:
-  - GitHub Actions automated deployment workflows for backend and frontend.
+  - GitHub Actions automated deployment workflows for backend (Google Cloud Run source deploy) and frontend (Vercel CLI).
 
-### Recommended Monorepo / Directory Layout:
+### Repository Directory Layout:
 ```text
 grocery-list-app/
 ├── SPEC.md
 ├── README.md
-├── package.json
+├── .gitignore
 ├── .github/
 │   └── workflows/
 │       ├── deploy-backend.yml
 │       └── deploy-frontend.yml
 ├── backend/
+│   ├── .gcloudignore
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── .env.example
 │   ├── src/
 │   │   ├── config/
-│   │   │   ├── firestore.ts
-│   │   │   └── env.ts
+│   │   │   ├── env.ts
+│   │   │   └── firestore.ts
 │   │   ├── controllers/
 │   │   │   ├── items.controller.ts
 │   │   │   └── lists.controller.ts
+│   │   ├── middlewares/
+│   │   │   ├── cors.ts
+│   │   │   └── errorHandler.ts
 │   │   ├── models/
 │   │   │   └── schema.ts
 │   │   ├── routes/
+│   │   │   ├── health.routes.ts
 │   │   │   ├── items.routes.ts
-│   │   │   ├── lists.routes.ts
-│   │   │   └── health.routes.ts
-│   │   ├── middlewares/
-│   │   │   ├── errorHandler.ts
-│   │   │   └── cors.ts
+│   │   │   └── lists.routes.ts
 │   │   └── server.ts
-│   ├── tests/
-│   │   ├── items.test.ts
-│   │   └── lists.test.ts
-│   ├── .env.example
-│   ├── package.json
-│   └── tsconfig.json
+│   └── tests/
+│       ├── health.test.ts
+│       ├── items.test.ts
+│       └── lists.test.ts
 └── frontend/
-    ├── src/
-    │   ├── api/
-    │   │   └── client.ts
-    │   ├── components/
-    │   │   ├── AddItemForm.tsx
-    │   │   ├── GroceryItemCard.tsx
-    │   │   ├── CategoryBadge.tsx
-    │   │   ├── ListSelector.tsx
-    │   │   ├── FilterBar.tsx
-    │   │   ├── Header.tsx
-    │   │   └── EmptyState.tsx
-    │   ├── hooks/
-    │   │   └── useGroceryList.ts
-    │   ├── types/
-    │   │   └── index.ts
-    │   ├── App.tsx
-    │   ├── main.tsx
-    │   └── index.css
-    ├── .env.example
-    ├── vercel.json
     ├── package.json
+    ├── tsconfig.json
+    ├── tsconfig.node.json
+    ├── vite.config.ts
     ├── tailwind.config.js
-    └── vite.config.ts
+    ├── postcss.config.js
+    ├── vercel.json
+    ├── index.html
+    ├── .env.example
+    └── src/
+        ├── api/
+        │   └── client.ts
+        ├── components/
+        │   ├── AddItemForm.tsx
+        │   ├── BatchActionsBar.tsx
+        │   ├── CategoryBadge.tsx
+        │   ├── EmptyState.tsx
+        │   ├── FilterBar.tsx
+        │   ├── GroceryItemCard.tsx
+        │   ├── Header.tsx
+        │   └── ListSelector.tsx
+        ├── hooks/
+        │   └── useGroceryList.ts
+        ├── types/
+        │   └── index.ts
+        ├── App.tsx
+        ├── main.tsx
+        └── index.css
 ```
 
 ---
@@ -135,9 +143,9 @@ All persistent application data must reside in **Google Cloud Firestore**:
 - **Root Collection Name**: `grocery-list-app`
 
 ### Data Hierarchy & Document Schema:
-Under the dedicated root collection `grocery-list-app`, maintain two document types (either in separate subcollections or using a `type` discriminator in root collection documents):
+Under the root collection `grocery-list-app`, maintain two document types:
 
-1. **Lists Document** (`collection('grocery-list-app').doc('lists').collection('user_lists')` or `type: 'list'`):
+1. **Lists Document** (`collection('grocery-list-app').doc('data').collection('lists')`):
    ```json
    {
      "id": "list_weekly_groceries",
@@ -149,7 +157,7 @@ Under the dedicated root collection `grocery-list-app`, maintain two document ty
    }
    ```
 
-2. **Items Document** (`collection('grocery-list-app').doc('items').collection('user_items')` or `collection('grocery-list-app').doc('lists').collection('user_lists').doc(listId).collection('items')`):
+2. **Items Document** (`collection('grocery-list-app').doc('data').collection('items')`):
    ```json
    {
      "id": "item_abc123",
@@ -166,38 +174,40 @@ Under the dedicated root collection `grocery-list-app`, maintain two document ty
    }
    ```
 
-- **Firestore Initialization**:
-  The backend must initialize the Firestore SDK with graceful fallback:
-  - In production / Cloud Run: Use Application Default Credentials (ADC) attached to the Cloud Run service identity.
-  - In local development: Accept `GOOGLE_APPLICATION_CREDENTIALS` or use a mock/emulator when offline.
+### Firestore Initialization & Mocking Fallback:
+- When deployed on Cloud Run, initialize `@google-cloud/firestore` with `projectId: 'ai-learning-499409'` relying on Google Application Default Credentials (ADC).
+- For local development and CI testing where credentials may not be present, provide an automatic fallback to an in-memory repository or Firestore emulator to ensure test suites and local boots never crash.
 
 ---
 
 ## 5. Backend REST API Specifications
 
-The backend must serve a JSON REST API and listen on the port provided by the environment (`process.env.PORT || 8080`).
+The backend serves a JSON REST API and binds to `0.0.0.0` listening on `process.env.PORT || 8080`.
 
 ### Endpoints:
 - `GET /health` or `GET /api/health`
-  - Response `200 OK`: `{ "status": "healthy", "service": "grocery-list-app-api", "timestamp": "..." }`
+  - Response `200 OK`:
+    ```json
+    { "status": "healthy", "service": "grocery-list-app-api", "timestamp": "2026-10-11T19:20:00.000Z" }
+    ```
 - `GET /api/lists`
-  - Returns array of all lists. If none exists, auto-seed a default "Weekly Groceries" list.
+  - Returns array of all lists. If none exist, automatically seeds and returns the default "Weekly Groceries" list.
 - `POST /api/lists`
-  - Body: `{ "name": string, "description"?: string }`
-  - Returns `201 Created` with created list object.
+  - Request Body: `{ "name": string, "description"?: string }`
+  - Response `201 Created` with created list object.
 - `GET /api/lists/:listId`
-  - Returns list details and summary counts (total items, completed items).
+  - Returns list details and item counts (`totalItems`, `completedItems`).
 - `DELETE /api/lists/:listId`
-  - Deletes the list and cascades deletion to its items.
+  - Deletes the list and cascades deletion to all associated items.
 - `GET /api/items`
   - Query parameters:
-    - `listId` (optional, filter by specific list)
-    - `category` (optional, filter by category)
-    - `isCompleted` (optional boolean, filter by status)
-    - `search` (optional string, fuzzy/substring match on name/notes)
+    - `listId` (optional string)
+    - `category` (optional string)
+    - `isCompleted` (optional boolean string: `'true'` or `'false'`)
+    - `search` (optional string, case-insensitive substring match on name/notes)
   - Returns array of grocery items.
 - `POST /api/items`
-  - Body:
+  - Request Body:
     ```json
     {
       "listId": "list_weekly_groceries",
@@ -209,47 +219,56 @@ The backend must serve a JSON REST API and listen on the port provided by the en
       "notes": ""
     }
     ```
-  - Returns `201 Created` with created item document.
+  - Response `201 Created` with created item document.
 - `GET /api/items/:id`
   - Returns single item.
 - `PATCH /api/items/:id`
-  - Supports partial updates (e.g. toggling `isCompleted: true`, updating `quantity`, changing `category`).
-  - Returns `200 OK` with updated item.
+  - Request Body: Partial item fields (e.g., `{ "isCompleted": true }`, `{ "quantity": 3 }`).
+  - Response `200 OK` with updated item.
 - `DELETE /api/items/:id`
-  - Deletes the item. Returns `200 OK` or `204 No Content`.
+  - Deletes the item. Response `204 No Content` or `200 OK`.
 - `POST /api/items/clear-completed`
-  - Query / Body: `{ "listId": string }`
-  - Batch deletes all completed items in the given list.
+  - Request Body: `{ "listId": string }`
+  - Batch deletes all completed items belonging to `listId`. Response: `{ "deletedCount": number }`.
 
 ### Standards & Middleware:
-- CORS middleware allowing Vercel production frontend domains and `http://localhost:*`.
-- Request body parser (`express.json()`).
-- Centralized error handler returning consistent format: `{ "error": { "code": "NOT_FOUND", "message": "..." } }`.
+- CORS middleware configured to accept `http://localhost:*`, all Vercel deployment preview domains (`https://*.vercel.app`), and custom domains.
+- `express.json()` body parser.
+- Centralized error handler returning `{ "error": { "code": string, "message": string } }` with appropriate HTTP status codes (400, 404, 500).
 
 ---
 
 ## 6. Frontend Specifications & User Interface
 
-- **Component Hierarchy**:
-  - `Header`: App branding, active list selector dropdown, new list button, dark/light theme switcher.
-  - `FilterBar`: Search input with clear button, category filter dropdown/chips, status filter tabs (`All`, `Active`, `Done`).
-  - `AddItemForm`: Quick-entry bar with autocomplete/category inference (e.g., typing "Apples" auto-suggests "Produce"), quantity stepper, unit selector, and "Add" button.
-  - `GroceryList`: Grouped or flat list rendering `GroceryItemCard` components.
+- **Component Hierarchy & UX**:
+  - `Header`: App branding, active list selector dropdown, modal trigger for new list, theme toggle (dark/light).
+  - `FilterBar`: Search input with quick clear, category filter pills, status filter tabs (`All`, `Active`, `Done`), sort dropdown.
+  - `AddItemForm`: Quick item entry with instant category inference based on item name keywords, quantity stepper, unit selector, priority picker.
   - `GroceryItemCard`:
-    - Large checkbox / tap target for quick check/uncheck.
-    - Title with completed strikethrough styling.
-    - Category pill with distinctive colors.
-    - Quantity & unit badge.
-    - Inline edit and delete buttons.
-  - `EmptyState`: Contextual illustrated message when list is empty or search returns 0 results.
-  - `BatchActionsBar`: Sticky bottom or top bar showing "X completed items" with a "Clear Completed" button.
-- **Optimistic UI**: Checking an item immediately updates the UI; if the network fails, roll back state and display a toast alert.
+    - Large tap target checkbox for grocery aisle operation.
+    - Strikethrough style for completed items.
+    - Category badge with color-coded chip.
+    - Quantity/unit indicator and stepper (`+`/`-`).
+    - Edit and delete actions.
+  - `BatchActionsBar`: Appears when completed items exist, showing item count and a "Clear Completed" button.
+  - `EmptyState`: Contextual feedback for empty lists or zero search results.
+- **Client Routing & Single-Page Application (SPA) Resilience**:
+  - `frontend/vercel.json` must include SPA rewrites to prevent 404 errors on browser page reloads:
+    ```json
+    {
+      "rewrites": [
+        { "source": "/(.*)", "destination": "/index.html" }
+      ]
+    }
+    ```
+- **Optimistic State Management**:
+  - Toggling items immediately reflects in the UI. If the API request fails, state rolls back with an error notification.
 
 ---
 
 ## 7. Configuration & Environment Variables
 
-### Backend (`backend/.env`):
+### Backend Configuration (`backend/.env.example`):
 ```ini
 PORT=8080
 NODE_ENV=production
@@ -258,11 +277,9 @@ FIRESTORE_COLLECTION=grocery-list-app
 CORS_ORIGIN=*
 ```
 
-### Frontend (`frontend/.env`):
+### Frontend Configuration (`frontend/.env.example`):
 ```ini
-VITE_API_URL=https://grocery-list-app-api-<hash>-uc.a.run.app
-# If Next.js:
-# NEXT_PUBLIC_API_URL=https://grocery-list-app-api-<hash>-uc.a.run.app
+VITE_API_URL=https://grocery-list-app-api-XXXXXXXXXX-uc.a.run.app
 ```
 
 ---
@@ -270,23 +287,25 @@ VITE_API_URL=https://grocery-list-app-api-<hash>-uc.a.run.app
 ## 8. Automated Testing Requirements
 
 - **Backend Tests**:
-  - Unit tests for validation schemas and controller logic.
-  - Integration tests for endpoints (`/health`, `/api/lists`, `/api/items`, item update, batch clear) using a mocked Firestore client or in-memory stub.
+  - Integration and unit tests using Vitest or Jest with `supertest`.
+  - Comprehensive coverage of `/health`, `/api/lists`, `/api/items`, item patching, filtering, and completed item purging.
+  - Mocked Firestore client so tests run without GCP credentials in CI.
 - **Frontend Tests**:
-  - Unit/Component tests for `AddItemForm`, `GroceryItemCard`, and filter logic.
-  - Testing user interactions: adding an item, toggling checkbox, filtering by category.
-- **Health Verification**:
-  - Add `npm test` script in both backend and frontend package files.
+  - Component tests using Vitest and React Testing Library.
+  - Validation of item addition, checkbox toggle, category filtering, and empty states.
+- Both `backend/package.json` and `frontend/package.json` must include an executable `npm test` script that passes cleanly in CI without external network access.
 
 ---
 
-## 9. Deployment & CI/CD Pipelines
+## 9. Deployment Architecture & CI/CD Pipelines
 
-### 1. Backend Deployment: Google Cloud Run
+Both backend and frontend deployments must be bulletproof, accounting for the common points of failure in Cloud Run source builds and Vercel monorepo builds.
+
+### 1. Backend: Google Cloud Run Deployment
 - **Target Project**: `ai-learning-499409`
 - **Service Name**: `grocery-list-app-api`
 - **Region**: `us-central1`
-- **CRITICAL RULES for Cloud Run**:
+- **Mandatory Cloud Run Source-Deploy Rules**:
   - **Source Deployment Mandate**: MUST use source-based deployment:
     ```bash
     gcloud run deploy grocery-list-app-api \
@@ -297,46 +316,188 @@ VITE_API_URL=https://grocery-list-app-api-<hash>-uc.a.run.app
       --allow-unauthenticated \
       --port 8080
     ```
-  - **DO NOT** use `docker build`, `docker push`, or `--image`. Cloud Run source deployment will automatically build and package the code.
-  - **NEVER** set `PORT` in `--set-env-vars` or `--update-env-vars` on Cloud Run. Cloud Run manages the `PORT` environment variable internally. Always specify `--port 8080` as the container listening port flag.
-- **GitHub Actions Workflow** (`.github/workflows/deploy-backend.yml`):
-  - Triggers on push to `main` branch when changes occur in `backend/**`.
-  - Authenticates using Google Cloud Workload Identity Federation or Service Account Key secret (`GCP_SA_KEY`).
-  - Runs tests.
-  - Deploys backend via `gcloud run deploy grocery-list-app-api --source ./backend ...`.
+  - **DO NOT** use `docker build`, `docker push`, or `--image`. Cloud Run source deployment packages and compiles the code directly.
+  - **CRITICAL PORT RESTRICTION**: **NEVER** set `PORT` in `--set-env-vars` or `--update-env-vars` on Cloud Run. Setting `PORT` as an environment variable will cause Cloud Run deployment to fail. Cloud Run sets `PORT` automatically; the deployment flag must specify `--port 8080` to instruct Cloud Run which port the container listens on.
+  - **Buildpack & Runtime Packaging (`backend/package.json`)**:
+    - Cloud Run source deploy uses Google Cloud Buildpacks. The `backend/package.json` must include:
+      ```json
+      "scripts": {
+        "build": "tsc",
+        "start": "node dist/server.js",
+        "prestart": "npm run build"
+      }
+      ```
+    - Ensure all dependencies required at runtime are in `"dependencies"`, and TypeScript compiler tools are properly accessible during buildpack compilation.
+    - Provide a `backend/.gcloudignore` file to prevent uploading `node_modules`, test coverage, and local environment files:
+      ```text
+      .git
+      .gitignore
+      node_modules/
+      coverage/
+      *.log
+      .env
+      ```
+- **Backend GitHub Actions Workflow (`.github/workflows/deploy-backend.yml`)**:
+  ```yaml
+  name: Deploy Backend to Google Cloud Run
 
-### 2. Frontend Deployment: Vercel
-- **Vercel Scope / Team**: `noam-projects2`
-- **Vercel Project Name**: `grocery-list-app-ui`
-- **GitHub Actions Workflow** (`.github/workflows/deploy-frontend.yml`):
-  - Triggers on push to `main` branch when changes occur in `frontend/**`.
-  - Uses `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID`.
-  - Injects `VITE_API_URL` pointing to the deployed Cloud Run backend service.
-  - Runs tests, builds with Vercel CLI (`vercel pull --environment=production`, `vercel build --prod`, `vercel deploy --prebuilt --prod`).
+  on:
+    push:
+      branches: [ main ]
+      paths:
+        - 'backend/**'
+        - '.github/workflows/deploy-backend.yml'
+    workflow_dispatch:
+
+  jobs:
+    deploy:
+      name: Test & Deploy Backend
+      runs-on: ubuntu-latest
+      defaults:
+        run:
+          working-directory: backend
+
+      steps:
+        - name: Checkout Code
+          uses: actions/checkout@v4
+
+        - name: Setup Node.js
+          uses: actions/setup-node@v4
+          with:
+            node-version: 20
+            cache: 'npm'
+            cache-dependency-path: backend/package-lock.json
+
+        - name: Install Dependencies
+          run: npm ci
+
+        - name: Run Tests
+          run: npm test
+
+        - name: Build TypeScript
+          run: npm run build
+
+        - name: Authenticate to Google Cloud
+          uses: google-github-actions/auth@v2
+          with:
+            credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+        - name: Set up Cloud SDK
+          uses: google-github-actions/setup-gcloud@v2
+
+        - name: Deploy to Cloud Run (Source Deploy)
+          run: |
+            gcloud run deploy grocery-list-app-api \
+              --source . \
+              --project ai-learning-499409 \
+              --region us-central1 \
+              --platform managed \
+              --allow-unauthenticated \
+              --port 8080 \
+              --set-env-vars "NODE_ENV=production,GCP_PROJECT_ID=ai-learning-499409,FIRESTORE_COLLECTION=grocery-list-app,CORS_ORIGIN=*"
+  ```
+
+### 2. Frontend: Vercel Deployment
+- **Target Vercel Scope / Team**: `noam-projects2`
+- **Target Vercel Project Name**: `grocery-list-app-ui`
+- **Monorepo Directory Isolation**:
+  - The frontend resides in the `frontend/` directory. All Vercel CLI commands must execute inside `frontend/` (using GitHub Actions `defaults.run.working-directory: frontend` or `--cwd frontend`).
+  - `frontend/package.json` must specify `"scripts": { "build": "tsc && vite build", ... }`.
+  - Ensure `frontend/vercel.json` provides the SPA rewrite rule.
+- **Frontend GitHub Actions Workflow (`.github/workflows/deploy-frontend.yml`)**:
+  ```yaml
+  name: Deploy Frontend to Vercel
+
+  on:
+    push:
+      branches: [ main ]
+      paths:
+        - 'frontend/**'
+        - '.github/workflows/deploy-frontend.yml'
+    workflow_dispatch:
+
+  jobs:
+    deploy:
+      name: Test & Deploy Frontend
+      runs-on: ubuntu-latest
+      defaults:
+        run:
+          working-directory: frontend
+
+      steps:
+        - name: Checkout Code
+          uses: actions/checkout@v4
+
+        - name: Setup Node.js
+          uses: actions/setup-node@v4
+          with:
+            node-version: 20
+            cache: 'npm'
+            cache-dependency-path: frontend/package-lock.json
+
+        - name: Install Dependencies
+          run: npm ci
+
+        - name: Run Tests
+          run: npm test
+
+        - name: Install Vercel CLI
+          run: npm install -g vercel@latest
+
+        - name: Pull Vercel Environment Information
+          run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }} --scope=noam-projects2
+          env:
+            VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+            VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+        - name: Build Project Artifacts
+          run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }} --scope=noam-projects2
+          env:
+            VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+            VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+            VITE_API_URL: ${{ secrets.VITE_API_URL }}
+
+        - name: Deploy Prebuilt Artifacts to Vercel
+          run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} --scope=noam-projects2
+          env:
+            VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+            VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  ```
+
+### 3. CI/CD Troubleshooting & Failure Prevention Checklist
+To resolve and prevent deployment failures on both platforms, ensure:
+1. **Google Cloud Run**:
+   - `GCP_SA_KEY` secret in GitHub contains valid Service Account JSON with roles: `Cloud Run Admin` (`roles/run.admin`), `Cloud Build Editor` (`roles/cloudbuild.builds.editor`), `Storage Admin` (`roles/storage.admin`), `Artifact Registry Admin` (`roles/artifactregistry.admin`), and `Service Account User` (`roles/iam.serviceAccountUser`).
+   - Necessary APIs are enabled in project `ai-learning-499409`: `run.googleapis.com`, `cloudbuild.googleapis.com`, `artifactregistry.googleapis.com`, `firestore.googleapis.com`.
+   - Never pass `PORT=8080` in `--set-env-vars`; pass `--port 8080` only.
+   - Run `gcloud run deploy` directly inside `backend/` with `--source .` so buildpacks locate `backend/package.json` at root.
+2. **Vercel**:
+   - GitHub secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` are configured.
+   - Vercel CLI commands run with `--scope noam-projects2` inside the `frontend` folder.
+   - `VITE_API_URL` secret is populated with the Cloud Run backend URL (or fallback production URL).
+   - TypeScript compiles cleanly (`tsc --noEmit` exits 0) before Vite builds.
 
 ---
 
-## 10. Execution Plan
+## 10. Execution Order & Verification
 
-When implementing this application:
-1. **Author `SPEC.md`**: Write the full 12-section `SPEC.md` with every architectural detail, endpoint payload, data model, and deployment script.
-2. **Setup Project Structure**: Initialize monorepo or dual-directory structure (`backend` and `frontend`).
-3. **Implement Backend**:
-   - Configure Firestore connection pointing to project `ai-learning-499409` and collection `grocery-list-app`.
-   - Implement routes, controllers, middleware, and CORS.
-   - Write backend tests and verify with local test runner.
-4. **Implement Frontend**:
-   - Set up React/TypeScript with Tailwind CSS.
-   - Implement UI components, list selector, category chips, search/filter, and optimistic mutations.
-   - Connect API client to backend endpoints.
-5. **Create GitHub Actions Workflows**:
-   - Write `.github/workflows/deploy-backend.yml` with source-based Cloud Run deployment obeying all constraints.
-   - Write `.github/workflows/deploy-frontend.yml` targeting Vercel project `grocery-list-app-ui` under team `noam-projects2`.
-6. **Verify End-to-End**: Ensure all tests pass, SPEC.md remains up-to-date and complete, and the application is production-ready.
+1. **Author `SPEC.md`**: Create the comprehensive 12-section `SPEC.md` covering all features, data models, endpoints, build configurations, and deployment strategies.
+2. **Backend Construction**:
+   - Create `backend/package.json`, `tsconfig.json`, and `.gcloudignore`.
+   - Implement Firestore configuration targeting project `ai-learning-499409` and collection `grocery-list-app`.
+   - Implement Express routes, Zod validation, and controllers.
+   - Add backend test suites with mock Firestore clients and verify `npm test` passes.
+3. **Frontend Construction**:
+   - Initialize Vite React TypeScript project in `frontend/`.
+   - Configure Tailwind CSS, Lucide icons, and `vercel.json` SPA rewrite rules.
+   - Implement list switcher, category filters, item stepper, optimistic updates, and API client.
+   - Add frontend unit tests and verify `npm test` passes.
+4. **Deployments & Workflows**:
+   - Write `.github/workflows/deploy-backend.yml` strictly following Google Cloud Run source-deploy constraints.
+   - Write `.github/workflows/deploy-frontend.yml` strictly targeting Vercel team `noam-projects2` and project `grocery-list-app-ui`.
+5. **Final Review**: Validate that code, tests, and configuration directly mirror `SPEC.md`. Ensure zero deployment misconfigurations exist.
 
 ---
 
-## User Prompt History
-
-### Prompt 1
-create grocery list app. deploy ui to vercel. backend to google cloud.
+## User Prompt 2
+the deployment for both vercel and google cloud failed....

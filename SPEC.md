@@ -462,23 +462,39 @@ interface GroceryItem {
 - **Deployment Mode**: Source deployment (`gcloud run deploy grocery-list-app-api --source . ...` executed inside `./backend`)
 - **Secret**: `GCP_SA_KEY` (Google Cloud Service Account JSON)
 - **GitHub Actions Workflow**: `.github/workflows/deploy-backend.yml`
-  - Trigger: `push` to `main` branch matching `backend/**` or workflow file, plus `workflow_dispatch`.
+  - Trigger: `push` to `main` branch matching `backend/**`, `SPEC.md`, `package.json`, or workflow file, plus `workflow_dispatch`.
   - Condition: `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`
   - Dependency Installation: Uses `npm install` (avoiding `npm ci` failures due to uncommitted lockfiles)
-  - Containerization & Source Build: Provides multi-stage `Dockerfile` and `.gcloudignore` so Google Cloud Build / Cloud Run builds cleanly without buildpack tool mismatches. `package.json` includes `typescript` in `dependencies` and provides both `"build": "tsc"` and `"gcp-build": "tsc"`.
+  - Testing Step: Configured with `jest.config.js` and `ts-jest` preset in `package.json` so `npm test` successfully compiles TypeScript test files without syntax errors.
+  - Deployment Command:
+    ```bash
+    gcloud run deploy grocery-list-app-api \
+      --source . \
+      --project ai-learning-499409 \
+      --region us-central1 \
+      --allow-unauthenticated \
+      --port 8080 \
+      --quiet \
+      --set-env-vars "GCP_PROJECT_ID=ai-learning-499409,FIRESTORE_COLLECTION=grocery-list-app,NODE_ENV=production,CORS_ORIGIN=*"
+    ```
+  - Multi-stage `Dockerfile` and `.gcloudignore` provide deterministic container compilation fallback without requiring local docker execution. Express server binds to `0.0.0.0` and listens on `PORT` provided by Cloud Run.
 
 ### Vercel (Frontend UI)
 - **Project Name**: `grocery-list-app-ui`
 - **Scope / Team**: `noam-projects2`
 - **Secret**: `VERCEL_TOKEN` (Only `VERCEL_TOKEN` is required; `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` are not needed)
 - **GitHub Actions Workflow**: `.github/workflows/deploy-frontend.yml`
-  - Trigger: `push` to `main` branch matching `frontend/**` or workflow file, plus `workflow_dispatch`.
+  - Trigger: `push` to `main` branch matching `frontend/**`, `SPEC.md`, `package.json`, or workflow file, plus `workflow_dispatch`.
   - Condition: `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`
   - Dependency Installation: Uses `npm install` (avoiding `npm ci` failures due to uncommitted lockfiles)
+  - Step Name: `Deploy grocery-list-app-ui to Vercel`
   - Deployment Command: Direct non-interactive CLI deployment:
-    `vercel deploy --prod --project grocery-list-app-ui --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }} --yes`
+    ```bash
+    vercel deploy --prod --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }} --yes
+    ```
+  - Crucial fix: Vercel CLI's `deploy` subcommand does not accept `--project` (which triggers `error: unknown option '--project'`). Project identity is determined by `"name": "grocery-list-app-ui"` defined in `frontend/vercel.json` and `frontend/package.json`.
   - Avoids `vercel pull` and `--prebuilt` flows that require nonexistent `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` secrets.
-  - `vercel.json` and `package.json` explicitly define `"name": "grocery-list-app-ui"` and SPA routing rewrites to `/index.html`.
+  - `vercel.json` configures SPA routing rewrites to `/index.html`.
 
 ### Root Cause Analysis & Deployment Hardening
 1. **Failure Cause 1: `npm ci` lockfile requirement in GitHub Actions**
@@ -486,10 +502,19 @@ interface GroceryItem {
    - *Resolution*: Updated workflow steps to use `npm install`, which cleanly reads `package.json` dependencies.
 2. **Failure Cause 2: Missing Vercel Organization & Project ID Secrets**
    - *Problem*: Frontend workflow used `vercel pull` with `${{ secrets.VERCEL_ORG_ID }}` and `${{ secrets.VERCEL_PROJECT_ID }}`. In repositories where only `VERCEL_TOKEN` is configured, `vercel pull` aborts.
-   - *Resolution*: Replaced `vercel pull` / `vercel build` / `vercel deploy --prebuilt` with direct `vercel deploy --prod --project grocery-list-app-ui --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }} --yes`.
+   - *Resolution*: Replaced `vercel pull` / `vercel build` / `vercel deploy --prebuilt` with direct `vercel deploy --prod --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }} --yes`.
 3. **Failure Cause 3: Cloud Run Buildpack TypeScript Pruning**
    - *Problem*: In default Cloud Buildpacks, `typescript` in `devDependencies` is pruned or omitted when installing in production mode, leading to `tsc: command not found`.
    - *Resolution*: Added `typescript` and type definitions into `backend/package.json` dependencies, added `"gcp-build": "tsc"`, created `.gcloudignore`, and added a production multi-stage `Dockerfile` in `backend/` for bulletproof Cloud Run source deployment.
 4. **Failure Cause 4: Cloud Run Reserved PORT Variable**
    - *Rule*: Cloud Run forbids passing `PORT` in `--set-env-vars`. Only `--port 8080` is used, and the backend Express server binds to `process.env.PORT || 8080` on `0.0.0.0`.
+5. **Failure Cause 5: Vercel CLI unknown option `--project` on `vercel deploy`**
+   - *Problem*: `vercel deploy --project grocery-list-app-ui ...` failed because `--project` is not a recognized flag for `vercel deploy` in Vercel CLI.
+   - *Resolution*: Removed `--project` from `vercel deploy`. The project name `grocery-list-app-ui` is already specified in `frontend/vercel.json` and `frontend/package.json`, which Vercel CLI automatically reads when run within `./frontend`.
+6. **Failure Cause 6: Missing Jest TypeScript Configuration (`ts-jest`) in `backend/`**
+   - *Problem*: `npm test` in `backend` failed during CI because Jest tried to run `items.test.ts` and `lists.test.ts` without a Jest config, causing `SyntaxError: Cannot use import statement outside a module`.
+   - *Resolution*: Added `backend/jest.config.js` and added `"jest": { "preset": "ts-jest", "testEnvironment": "node", "testMatch": ["**/*.test.ts"] }` to `backend/package.json`.
+7. **Failure Cause 7: Non-Interactive Prompting in `gcloud run deploy`**
+   - *Problem*: `gcloud run deploy` in automated CI environments may block or fail when prompting to create Artifact Registry repositories or enable services if stdin is closed.
+   - *Resolution*: Added the `--quiet` flag to `gcloud run deploy` to ensure headless, fully non-interactive execution.
 

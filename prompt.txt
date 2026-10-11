@@ -55,7 +55,7 @@ You are tasked with building, testing, hardening, and deploying the complete, pr
 
 ### Technology Stack:
 - **Frontend**:
-  - Framework: React 18+ with TypeScript using Vite.
+  - Framework: React 18+ with TypeScript using Vite (`@vitejs/plugin-react`).
   - Styling: Tailwind CSS with Lucide React icons.
   - State & Data Fetching: TanStack Query (React Query) or custom hook with optimistic cache updates.
   - Hosting: Vercel (Scope / Team: `noam-projects2`, Project Name: `grocery-list-app-ui`).
@@ -143,7 +143,7 @@ All persistent application data must reside in **Google Cloud Firestore**:
 - **Root Collection Name**: `grocery-list-app`
 
 ### Data Hierarchy & Document Schema:
-Under the root collection `grocery-list-app`, maintain two document types:
+Under the root collection `grocery-list-app`, maintain two sub-collections:
 
 1. **Lists Document** (`collection('grocery-list-app').doc('data').collection('lists')`):
    ```json
@@ -174,15 +174,25 @@ Under the root collection `grocery-list-app`, maintain two document types:
    }
    ```
 
-### Firestore Initialization & Mocking Fallback:
+### Firestore Initialization & Fault-Tolerant Fallback:
 - When deployed on Cloud Run, initialize `@google-cloud/firestore` with `projectId: 'ai-learning-499409'` relying on Google Application Default Credentials (ADC).
-- For local development and CI testing where credentials may not be present, provide an automatic fallback to an in-memory repository or Firestore emulator to ensure test suites and local boots never crash.
+- The server must handle ADC/Firestore initialization lazily and gracefully. Boot and health check routes (`/health`) must never crash even if Firestore credentials take time to initialize or if network latency occurs.
+- For local development and CI testing environments without GCP credentials, provide an automatic in-memory mock repository fallback (`USE_MOCK_STORE=true` or automatic fallback when `GOOGLE_APPLICATION_CREDENTIALS` is absent and `NODE_ENV !== 'production'`) so test suites and local dev boots execute reliably.
 
 ---
 
 ## 5. Backend REST API Specifications
 
-The backend serves a JSON REST API and binds to `0.0.0.0` listening on `process.env.PORT || 8080`.
+The backend serves a JSON REST API and **MUST explicitly bind to `0.0.0.0`** listening on `process.env.PORT || 8080`.
+*(Binding to `127.0.0.1` or `localhost` is strictly prohibited as it causes Cloud Run container health check failures).*
+
+```typescript
+const PORT = parseInt(process.env.PORT || '8080', 10);
+const HOST = '0.0.0.0';
+app.listen(PORT, HOST, () => {
+  console.log(`grocery-list-app-api listening on ${HOST}:${PORT}`);
+});
+```
 
 ### Endpoints:
 - `GET /health` or `GET /api/health`
@@ -232,7 +242,7 @@ The backend serves a JSON REST API and binds to `0.0.0.0` listening on `process.
   - Batch deletes all completed items belonging to `listId`. Response: `{ "deletedCount": number }`.
 
 ### Standards & Middleware:
-- CORS middleware configured to accept `http://localhost:*`, all Vercel deployment preview domains (`https://*.vercel.app`), and custom domains.
+- CORS middleware configured to accept `*`, `http://localhost:*`, all Vercel deployment preview domains (`https://*.vercel.app`), and production custom domains.
 - `express.json()` body parser.
 - Centralized error handler returning `{ "error": { "code": string, "message": string } }` with appropriate HTTP status codes (400, 404, 500).
 
@@ -245,7 +255,7 @@ The backend serves a JSON REST API and binds to `0.0.0.0` listening on `process.
   - `FilterBar`: Search input with quick clear, category filter pills, status filter tabs (`All`, `Active`, `Done`), sort dropdown.
   - `AddItemForm`: Quick item entry with instant category inference based on item name keywords, quantity stepper, unit selector, priority picker.
   - `GroceryItemCard`:
-    - Large tap target checkbox for grocery aisle operation.
+    - Large tap target checkbox (min 44x44px touch area) for grocery aisle operation.
     - Strikethrough style for completed items.
     - Category badge with color-coded chip.
     - Quantity/unit indicator and stepper (`+`/`-`).
@@ -253,7 +263,7 @@ The backend serves a JSON REST API and binds to `0.0.0.0` listening on `process.
   - `BatchActionsBar`: Appears when completed items exist, showing item count and a "Clear Completed" button.
   - `EmptyState`: Contextual feedback for empty lists or zero search results.
 - **Client Routing & Single-Page Application (SPA) Resilience**:
-  - `frontend/vercel.json` must include SPA rewrites to prevent 404 errors on browser page reloads:
+  - `frontend/vercel.json` must configure SPA rewrites cleanly to prevent 404 errors on browser page reloads:
     ```json
     {
       "rewrites": [
@@ -262,7 +272,10 @@ The backend serves a JSON REST API and binds to `0.0.0.0` listening on `process.
     }
     ```
 - **Optimistic State Management**:
-  - Toggling items immediately reflects in the UI. If the API request fails, state rolls back with an error notification.
+  - Toggling items immediately reflects in the UI. If the API request fails, state rolls back with an error toast notification.
+- **TypeScript & Build Hygiene**:
+  - In `frontend/tsconfig.json`, set `"skipLibCheck": true` to avoid third-party declaration mismatch failures during CI builds.
+  - Ensure all environment variables accessed on client use Vite's `import.meta.env.VITE_API_URL` with a resilient fallback to `http://localhost:8080`.
 
 ---
 
@@ -289,193 +302,253 @@ VITE_API_URL=https://grocery-list-app-api-XXXXXXXXXX-uc.a.run.app
 - **Backend Tests**:
   - Integration and unit tests using Vitest or Jest with `supertest`.
   - Comprehensive coverage of `/health`, `/api/lists`, `/api/items`, item patching, filtering, and completed item purging.
-  - Mocked Firestore client so tests run without GCP credentials in CI.
+  - Tests must execute independently with mock Firestore / in-memory store without GCP credentials in CI.
 - **Frontend Tests**:
   - Component tests using Vitest and React Testing Library.
   - Validation of item addition, checkbox toggle, category filtering, and empty states.
-- Both `backend/package.json` and `frontend/package.json` must include an executable `npm test` script that passes cleanly in CI without external network access.
+- Both `backend/package.json` and `frontend/package.json` must include an executable `npm test` script that passes cleanly in CI without network access.
 
 ---
 
 ## 9. Deployment Architecture & CI/CD Pipelines
 
-Both backend and frontend deployments must be bulletproof, accounting for the common points of failure in Cloud Run source builds and Vercel monorepo builds.
+Both backend and frontend deployments must be completely hardened against common buildpack, environment, and CLI pitfalls.
 
 ### 1. Backend: Google Cloud Run Deployment
 - **Target Project**: `ai-learning-499409`
 - **Service Name**: `grocery-list-app-api`
 - **Region**: `us-central1`
-- **Mandatory Cloud Run Source-Deploy Rules**:
-  - **Source Deployment Mandate**: MUST use source-based deployment:
-    ```bash
-    gcloud run deploy grocery-list-app-api \
-      --source . \
-      --project ai-learning-499409 \
-      --region us-central1 \
-      --platform managed \
-      --allow-unauthenticated \
-      --port 8080
-    ```
-  - **DO NOT** use `docker build`, `docker push`, or `--image`. Cloud Run source deployment packages and compiles the code directly.
-  - **CRITICAL PORT RESTRICTION**: **NEVER** set `PORT` in `--set-env-vars` or `--update-env-vars` on Cloud Run. Setting `PORT` as an environment variable will cause Cloud Run deployment to fail. Cloud Run sets `PORT` automatically; the deployment flag must specify `--port 8080` to instruct Cloud Run which port the container listens on.
-  - **Buildpack & Runtime Packaging (`backend/package.json`)**:
-    - Cloud Run source deploy uses Google Cloud Buildpacks. The `backend/package.json` must include:
-      ```json
-      "scripts": {
-        "build": "tsc",
-        "start": "node dist/server.js",
-        "prestart": "npm run build"
-      }
-      ```
-    - Ensure all dependencies required at runtime are in `"dependencies"`, and TypeScript compiler tools are properly accessible during buildpack compilation.
-    - Provide a `backend/.gcloudignore` file to prevent uploading `node_modules`, test coverage, and local environment files:
-      ```text
-      .git
-      .gitignore
-      node_modules/
-      coverage/
-      *.log
-      .env
-      ```
-- **Backend GitHub Actions Workflow (`.github/workflows/deploy-backend.yml`)**:
-  ```yaml
-  name: Deploy Backend to Google Cloud Run
 
-  on:
-    push:
-      branches: [ main ]
-      paths:
-        - 'backend/**'
-        - '.github/workflows/deploy-backend.yml'
-    workflow_dispatch:
+#### Mandatory Cloud Run Source-Deploy Rules:
+1. **Source Deployment Mandate**: MUST use source-based deployment:
+   ```bash
+   gcloud run deploy grocery-list-app-api \
+     --source . \
+     --project ai-learning-499409 \
+     --region us-central1 \
+     --platform managed \
+     --allow-unauthenticated \
+     --port 8080
+   ```
+2. **DO NOT** use `docker build`, `docker push`, or `--image`. Cloud Run source deployment compiles and packages the code via Cloud Buildpacks directly.
+3. **CRITICAL PORT RESTRICTION**:
+   - **NEVER** set `PORT` in `--set-env-vars` or `--update-env-vars` on Cloud Run. Setting `PORT` as an environment variable will cause Cloud Run deployment to fail immediately.
+   - Cloud Run sets the `PORT` environment variable automatically inside the container.
+   - Use the deployment flag `--port 8080` to instruct Cloud Run which port the container listens on.
+4. **Host Binding Mandate**:
+   - The Express application **MUST** bind to host `0.0.0.0` (e.g., `app.listen(PORT, '0.0.0.0')`). If bound to `localhost` or `127.0.0.1`, Cloud Run container ingress cannot route traffic to the container and the deployment will fail with container health check timeouts.
+5. **Buildpack Compilation & Package Configuration (`backend/package.json`)**:
+   - Cloud Run source deploy compiles via Google Cloud Buildpacks. TypeScript build tools (`typescript`, `@types/node`, `@types/express`, `@types/cors`) must be listed in `"dependencies"` (or ensure buildpacks do not prune them prior to compiling).
+   - In `backend/package.json`, provide robust build and execution scripts:
+     ```json
+     {
+       "name": "grocery-list-app-backend",
+       "version": "1.0.0",
+       "scripts": {
+         "build": "tsc",
+         "start": "node dist/server.js",
+         "test": "vitest run"
+       },
+       "dependencies": {
+         "@google-cloud/firestore": "^7.11.0",
+         "cors": "^2.8.5",
+         "dotenv": "^16.4.7",
+         "express": "^4.21.2",
+         "zod": "^3.24.2",
+         "typescript": "^5.7.3",
+         "@types/node": "^22.13.1",
+         "@types/express": "^5.0.0",
+         "@types/cors": "^2.8.17"
+       }
+     }
+     ```
+6. **Exclude Extraneous Files (`backend/.gcloudignore`)**:
+   - Provide a strict `backend/.gcloudignore` so local node_modules, local tests, and environment files are not sent to Cloud Build:
+     ```text
+     .git
+     .gitignore
+     node_modules/
+     coverage/
+     *.log
+     .env
+     .env.*
+     ```
+7. **Service Account & IAM Roles for Cloud Run**:
+   - The GitHub Actions `GCP_SA_KEY` service account requires the following roles in project `ai-learning-499409`:
+     - `roles/run.admin` (Cloud Run Admin)
+     - `roles/iam.serviceAccountUser` (Service Account User)
+     - `roles/cloudbuild.builds.editor` (Cloud Build Editor)
+     - `roles/storage.admin` (Storage Admin - for Cloud Build source staging)
+     - `roles/artifactregistry.admin` (Artifact Registry Admin)
+   - Ensure target APIs are enabled on GCP:
+     - `run.googleapis.com`
+     - `cloudbuild.googleapis.com`
+     - `artifactregistry.googleapis.com`
+     - `firestore.googleapis.com`
 
-  jobs:
-    deploy:
-      name: Test & Deploy Backend
-      runs-on: ubuntu-latest
-      defaults:
-        run:
-          working-directory: backend
+#### Backend GitHub Actions Workflow (`.github/workflows/deploy-backend.yml`):
+```yaml
+name: Deploy Backend to Google Cloud Run
 
-      steps:
-        - name: Checkout Code
-          uses: actions/checkout@v4
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
 
-        - name: Setup Node.js
-          uses: actions/setup-node@v4
-          with:
-            node-version: 20
-            cache: 'npm'
-            cache-dependency-path: backend/package-lock.json
+jobs:
+  deploy:
+    name: Test & Deploy Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
 
-        - name: Install Dependencies
-          run: npm ci
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-        - name: Run Tests
-          run: npm test
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: backend/package.json
 
-        - name: Build TypeScript
-          run: npm run build
+      - name: Install Dependencies
+        run: npm install
 
-        - name: Authenticate to Google Cloud
-          uses: google-github-actions/auth@v2
-          with:
-            credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Run Tests
+        run: npm test
 
-        - name: Set up Cloud SDK
-          uses: google-github-actions/setup-gcloud@v2
+      - name: Precompile TypeScript
+        run: npm run build
 
-        - name: Deploy to Cloud Run (Source Deploy)
-          run: |
-            gcloud run deploy grocery-list-app-api \
-              --source . \
-              --project ai-learning-499409 \
-              --region us-central1 \
-              --platform managed \
-              --allow-unauthenticated \
-              --port 8080 \
-              --set-env-vars "NODE_ENV=production,GCP_PROJECT_ID=ai-learning-499409,FIRESTORE_COLLECTION=grocery-list-app,CORS_ORIGIN=*"
-  ```
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run (Source Deploy)
+        run: |
+          gcloud run deploy grocery-list-app-api \
+            --source . \
+            --project ai-learning-499409 \
+            --region us-central1 \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 8080 \
+            --set-env-vars "NODE_ENV=production,GCP_PROJECT_ID=ai-learning-499409,FIRESTORE_COLLECTION=grocery-list-app,CORS_ORIGIN=*"
+```
+
+---
 
 ### 2. Frontend: Vercel Deployment
 - **Target Vercel Scope / Team**: `noam-projects2`
 - **Target Vercel Project Name**: `grocery-list-app-ui`
-- **Monorepo Directory Isolation**:
-  - The frontend resides in the `frontend/` directory. All Vercel CLI commands must execute inside `frontend/` (using GitHub Actions `defaults.run.working-directory: frontend` or `--cwd frontend`).
-  - `frontend/package.json` must specify `"scripts": { "build": "tsc && vite build", ... }`.
-  - Ensure `frontend/vercel.json` provides the SPA rewrite rule.
-- **Frontend GitHub Actions Workflow (`.github/workflows/deploy-frontend.yml`)**:
-  ```yaml
-  name: Deploy Frontend to Vercel
 
-  on:
-    push:
-      branches: [ main ]
-      paths:
-        - 'frontend/**'
-        - '.github/workflows/deploy-frontend.yml'
-    workflow_dispatch:
+#### Mandatory Vercel Build & Monorepo Rules:
+1. **Explicit Project Linking**:
+   - Vercel CLI builds fail when a project is not pre-linked or when org/project IDs mismatch.
+   - Always run `npx vercel link --yes --project grocery-list-app-ui --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }}` before `vercel pull` to write the `.vercel/project.json` linking file deterministically inside `frontend/`.
+2. **Monorepo Directory Isolation**:
+   - The frontend resides strictly in `frontend/`.
+   - All Vercel CLI steps must execute with working directory set to `frontend/`.
+3. **TypeScript Build Guard**:
+   - Ensure `frontend/tsconfig.json` has `"skipLibCheck": true` and `"noEmitOnError": false` (or clean typing) so `npm run build` succeeds reliably.
+4. **Environment Variables**:
+   - Pass `VITE_API_URL` during the `vercel build --prod` step so client bundles are compiled with the active Cloud Run API URL.
+5. **Clean Vercel Configuration (`frontend/vercel.json`)**:
+   ```json
+   {
+     "rewrites": [
+       { "source": "/(.*)", "destination": "/index.html" }
+     ]
+   }
+   ```
 
-  jobs:
-    deploy:
-      name: Test & Deploy Frontend
-      runs-on: ubuntu-latest
-      defaults:
-        run:
-          working-directory: frontend
+#### Frontend GitHub Actions Workflow (`.github/workflows/deploy-frontend.yml`):
+```yaml
+name: Deploy Frontend to Vercel
 
-      steps:
-        - name: Checkout Code
-          uses: actions/checkout@v4
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:
 
-        - name: Setup Node.js
-          uses: actions/setup-node@v4
-          with:
-            node-version: 20
-            cache: 'npm'
-            cache-dependency-path: frontend/package-lock.json
+jobs:
+  deploy:
+    name: Test & Deploy Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
 
-        - name: Install Dependencies
-          run: npm ci
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-        - name: Run Tests
-          run: npm test
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package.json
 
-        - name: Install Vercel CLI
-          run: npm install -g vercel@latest
+      - name: Install Dependencies
+        run: npm install
 
-        - name: Pull Vercel Environment Information
-          run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }} --scope=noam-projects2
-          env:
-            VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-            VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Run Tests
+        run: npm test
 
-        - name: Build Project Artifacts
-          run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }} --scope=noam-projects2
-          env:
-            VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-            VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-            VITE_API_URL: ${{ secrets.VITE_API_URL }}
+      - name: Link Vercel Project
+        run: npx vercel link --yes --project grocery-list-app-ui --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-        - name: Deploy Prebuilt Artifacts to Vercel
-          run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} --scope=noam-projects2
-          env:
-            VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-            VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-  ```
+      - name: Pull Vercel Environment Configuration
+        run: npx vercel pull --yes --environment=production --token ${{ secrets.VERCEL_TOKEN }} --scope noam-projects2
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-### 3. CI/CD Troubleshooting & Failure Prevention Checklist
-To resolve and prevent deployment failures on both platforms, ensure:
-1. **Google Cloud Run**:
-   - `GCP_SA_KEY` secret in GitHub contains valid Service Account JSON with roles: `Cloud Run Admin` (`roles/run.admin`), `Cloud Build Editor` (`roles/cloudbuild.builds.editor`), `Storage Admin` (`roles/storage.admin`), `Artifact Registry Admin` (`roles/artifactregistry.admin`), and `Service Account User` (`roles/iam.serviceAccountUser`).
-   - Necessary APIs are enabled in project `ai-learning-499409`: `run.googleapis.com`, `cloudbuild.googleapis.com`, `artifactregistry.googleapis.com`, `firestore.googleapis.com`.
-   - Never pass `PORT=8080` in `--set-env-vars`; pass `--port 8080` only.
-   - Run `gcloud run deploy` directly inside `backend/` with `--source .` so buildpacks locate `backend/package.json` at root.
-2. **Vercel**:
-   - GitHub secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` are configured.
-   - Vercel CLI commands run with `--scope noam-projects2` inside the `frontend` folder.
-   - `VITE_API_URL` secret is populated with the Cloud Run backend URL (or fallback production URL).
-   - TypeScript compiles cleanly (`tsc --noEmit` exits 0) before Vite builds.
+      - name: Build Project Artifacts via Vercel CLI
+        run: npx vercel build --prod --token ${{ secrets.VERCEL_TOKEN }} --scope noam-projects2
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+
+      - name: Deploy Prebuilt Artifacts to Vercel Production
+        run: npx vercel deploy --prebuilt --prod --token ${{ secrets.VERCEL_TOKEN }} --scope noam-projects2
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+```
+
+---
+
+### 3. Deployment Troubleshooting & Failure Prevention Matrix
+
+| Failure Symptom | Underlying Cause | Mandatory Remedy |
+| :--- | :--- | :--- |
+| **Cloud Run**: *`Container failed to start. Failed to listen on PORT 8080 within timeout.`* | Server bound to `localhost` / `127.0.0.1` instead of `0.0.0.0`. | Explicitly call `app.listen(PORT, '0.0.0.0')` in `server.ts`. |
+| **Cloud Run**: *`Deploy failed: PORT env variable cannot be set.`* | Setting `PORT=8080` in `--set-env-vars`. | Remove `PORT` from `--set-env-vars`. Only pass the `--port 8080` CLI flag. |
+| **Cloud Run**: *`Buildpack command tsc: not found`* or buildpack exit code error. | TypeScript was placed in `devDependencies` and pruned during Cloud Build. | Place `typescript` and type declaration packages under `"dependencies"` in `backend/package.json`. |
+| **Cloud Run**: *`Permission denied`* during deployment. | GitHub secret `GCP_SA_KEY` missing Cloud Run or Cloud Build roles. | Grant `roles/run.admin`, `roles/iam.serviceAccountUser`, `roles/cloudbuild.builds.editor`, `roles/storage.admin`, and `roles/artifactregistry.admin` to the Service Account. |
+| **Vercel**: *`Error: Project not found`* or *`Could not find project matching grocery-list-app-ui`*. | Missing project linkage or scope mismatch before `vercel pull`. | Run `npx vercel link --yes --project grocery-list-app-ui --scope noam-projects2 --token ...` before `vercel pull`. |
+| **Vercel**: *`Missing VERCEL_PROJECT_ID or VERCEL_ORG_ID`*. | GitHub Actions secrets not injected into environment. | Set `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` as step `env` variables in every Vercel command. |
+| **Vercel**: *`TypeScript error during build`* (`tsc && vite build`). | Strict type checking failing on library discrepancies. | Enable `"skipLibCheck": true` in `frontend/tsconfig.json`. |
+| **Vercel**: *`404 Not Found`* on page reload or client route refresh. | Missing SPA rewrite rules in Vercel configuration. | Include `rewrites: [{ "source": "/(.*)", "destination": "/index.html" }]` in `frontend/vercel.json`. |
 
 ---
 
@@ -484,20 +557,47 @@ To resolve and prevent deployment failures on both platforms, ensure:
 1. **Author `SPEC.md`**: Create the comprehensive 12-section `SPEC.md` covering all features, data models, endpoints, build configurations, and deployment strategies.
 2. **Backend Construction**:
    - Create `backend/package.json`, `tsconfig.json`, and `.gcloudignore`.
-   - Implement Firestore configuration targeting project `ai-learning-499409` and collection `grocery-list-app`.
+   - Ensure dependencies contain `typescript` and Express type packages to prevent buildpack compile failures.
+   - Implement Express server with `0.0.0.0` host binding and port fallback `8080`.
+   - Implement Firestore client targeting GCP project `ai-learning-499409` and collection `grocery-list-app`, with mock repository fallback.
    - Implement Express routes, Zod validation, and controllers.
-   - Add backend test suites with mock Firestore clients and verify `npm test` passes.
+   - Add backend test suites and verify `npm test` passes.
 3. **Frontend Construction**:
    - Initialize Vite React TypeScript project in `frontend/`.
    - Configure Tailwind CSS, Lucide icons, and `vercel.json` SPA rewrite rules.
    - Implement list switcher, category filters, item stepper, optimistic updates, and API client.
    - Add frontend unit tests and verify `npm test` passes.
 4. **Deployments & Workflows**:
-   - Write `.github/workflows/deploy-backend.yml` strictly following Google Cloud Run source-deploy constraints.
-   - Write `.github/workflows/deploy-frontend.yml` strictly targeting Vercel team `noam-projects2` and project `grocery-list-app-ui`.
-5. **Final Review**: Validate that code, tests, and configuration directly mirror `SPEC.md`. Ensure zero deployment misconfigurations exist.
+   - Write `.github/workflows/deploy-backend.yml` strictly following Google Cloud Run source-deploy constraints (source deploy, no docker, `--port 8080`, no PORT in `--set-env-vars`, targeting project `ai-learning-499409` and service `grocery-list-app-api`).
+   - Write `.github/workflows/deploy-frontend.yml` strictly targeting Vercel team `noam-projects2` and project `grocery-list-app-ui` with explicit pre-linking (`vercel link`).
+5. **Final Review**: Validate that code, tests, and configuration directly mirror `SPEC.md`. Ensure all deployment failure vectors are eliminated.
+
 
 ---
 
-## User Prompt 2
-the deployment for both vercel and google cloud failed....
+## User Prompt History
+
+### Prompt 1
+You are Antigravity CLI on Cloud building the project 'grocery-list-app'. MANDATORY DEVELOPMENT WORKFLOW & SPECIFICATION DISCIPLINE:
+1. SPEC FIRST: Create or update `SPEC.md` in the project root directory FIRST before implementing any code. SPEC.md must capture the complete, current state of the application containing ALL 12 MANDATORY SECTIONS:
+   ## 1. Overview
+   ## 2. Requirements
+   ## 3. User Experience
+   ## 4. Architecture
+   ## 5. Technology Stack
+   ## 6. Backend
+   ## 7. Frontend
+   ## 8. Data Model
+   ## 9. API
+   ## 10. Configuration
+   ## 11. Testing
+   ## 12. Deployment
+   No section 1 to 12 may be omitted.
+2. CODE AS REFLECTION OF SPEC: Write complete, production-ready application code and automated tests (in tests/) strictly conforming to SPEC.md. Never write code that deviates from or contradicts SPEC.md.
+3. Deployment Naming Conventions & Rules (if deployment requested):
+   - Backend Cloud Run service name: 'grocery-list-app-api' (MUST be Source type deployment with `gcloud run deploy grocery-list-app-api --source . ...`; do NOT use docker build/push or --image; never set PORT in --set-env-vars)
+   - Frontend Vercel project name: 'grocery-list-app-ui'
+The backend platform will automatically commit and publish your generated files to GitHub when you finish.
+
+### Prompt 2
+still, both deployments failed...

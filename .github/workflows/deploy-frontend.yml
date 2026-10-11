@@ -7,6 +7,8 @@ on:
     paths:
       - 'frontend/**'
       - '.github/workflows/deploy-frontend.yml'
+      - 'SPEC.md'
+      - 'package.json'
   workflow_dispatch:
 
 jobs:
@@ -35,6 +37,7 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
-      - name: Deploy to Vercel
+      - name: Deploy grocery-list-app-ui to Vercel
         working-directory: ./frontend
-        run: vercel deploy --prod --project grocery-list-app-ui --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }} --yes
+        run: vercel deploy --prod --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }} --yes
+

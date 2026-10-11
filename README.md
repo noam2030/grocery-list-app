@@ -206,19 +206,24 @@ gcloud run deploy grocery-list-app-api \
   --region us-central1 \
   --allow-unauthenticated \
   --port 8080 \
-  --set-env-vars GCP_PROJECT_ID=ai-learning-499409,FIRESTORE_COLLECTION=grocery-list-app,NODE_ENV=production,CORS_ORIGIN=*
+  --quiet \
+  --set-env-vars "GCP_PROJECT_ID=ai-learning-499409,FIRESTORE_COLLECTION=grocery-list-app,NODE_ENV=production,CORS_ORIGIN=*"
 ```
-*Note: Cloud Run injects `$PORT` automatically; `--port 8080` specifies the container port. `PORT` is never passed to `--set-env-vars`.*
+*Note: Cloud Run injects `$PORT` automatically; `--port 8080` specifies the container port. `PORT` is never passed to `--set-env-vars`. `--quiet` ensures non-interactive headless execution in CI.*
 
 ### 2. Frontend to Vercel:
-The frontend deploys to Vercel targeting project `grocery-list-app-ui` under scope `noam-projects2`:
+The frontend deploys to Vercel targeting project `grocery-list-app-ui` (configured in `frontend/vercel.json` and `frontend/package.json`) under scope `noam-projects2`:
 ```bash
 cd frontend
-vercel deploy --prod --project grocery-list-app-ui --scope noam-projects2 --token $VERCEL_TOKEN --yes
+vercel deploy --prod --scope noam-projects2 --token $VERCEL_TOKEN --yes
 ```
 
 ### CI/CD Deployment Troubleshooting & Fixes:
-1. **GitHub Actions `npm ci` failures**: Fixed by running `npm install` across workflows to support environments without committed lockfiles.
-2. **Missing Vercel Org/Project ID Secrets**: Eliminated `vercel pull` and replaced with direct non-interactive `vercel deploy --prod --project grocery-list-app-ui --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }} --yes`.
-3. **Cloud Run Buildpack compilation**: Moved `typescript` to `dependencies` in `backend/package.json`, added `"gcp-build": "tsc"`, and provided a multi-stage `Dockerfile` and `.gcloudignore` for resilient source builds.
+1. **Vercel CLI `--project` Option Failure**: `vercel deploy` does not accept `--project` (which triggers `error: unknown option '--project'`). Project identity is determined by `"name": "grocery-list-app-ui"` defined in `frontend/vercel.json` and `frontend/package.json`.
+2. **Missing Jest TypeScript Configuration**: Configured `backend/jest.config.js` and `"jest"` in `backend/package.json` with `ts-jest` preset to prevent `SyntaxError: Cannot use import statement outside a module` during CI `npm test`.
+3. **Cloud Run Headless Prompting**: Added `--quiet` to `gcloud run deploy` to prevent blocking on unhandled standard input in GitHub Actions runners.
+4. **GitHub Actions `npm ci` Failures**: Standardized on `npm install` across workflows to support environments without committed lockfiles.
+5. **Missing Vercel Org/Project ID Secrets**: Eliminated `vercel pull` and replaced with direct non-interactive `vercel deploy --prod --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }} --yes`.
+6. **Cloud Run Buildpack Compilation**: Placed `typescript` in `dependencies` in `backend/package.json`, added `"gcp-build": "tsc"`, and provided a multi-stage `Dockerfile` and `.gcloudignore` for resilient source builds.
+
 

@@ -7,6 +7,8 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/deploy-backend.yml'
+      - 'SPEC.md'
+      - 'package.json'
   workflow_dispatch:
 
 jobs:
@@ -49,4 +51,6 @@ jobs:
             --region us-central1 \
             --allow-unauthenticated \
             --port 8080 \
-            --set-env-vars GCP_PROJECT_ID=ai-learning-499409,FIRESTORE_COLLECTION=grocery-list-app,NODE_ENV=production,CORS_ORIGIN=*
+            --quiet \
+            --set-env-vars "GCP_PROJECT_ID=ai-learning-499409,FIRESTORE_COLLECTION=grocery-list-app,NODE_ENV=production,CORS_ORIGIN=*"
+

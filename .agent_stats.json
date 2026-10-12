@@ -1,9 +1,9 @@
 {
-  "total_tokens": 15263815,
-  "prompt_tokens": 15079712,
-  "completion_tokens": 88539,
-  "build_runs": 5,
-  "last_run_tokens": 1476543,
-  "last_updated": "2026-10-12T06:31:05.325186+00:00",
+  "total_tokens": 20316088,
+  "prompt_tokens": 20086610,
+  "completion_tokens": 115805,
+  "build_runs": 6,
+  "last_run_tokens": 5052273,
+  "last_updated": "2026-10-12T06:44:27.763673+00:00",
   "is_estimated": false
 }

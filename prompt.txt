@@ -11,10 +11,10 @@ You are tasked with building, testing, hardening, and deploying the complete, pr
    1. **Overview**: Project purpose, target users, core shopping workflows, and value proposition.
    2. **Requirements**: Functional, non-functional, security, offline tolerance, and deployment requirements.
    3. **User Experience**: Design system, visual hierarchy, mobile-first one-handed shopping flows, accessibility (WCAG 2.1 AA compliant), keyboard navigation, and theme system.
-   4. **Architecture**: System architecture, monorepo directory layout, client-server contract, error propagation, and state management.
+   4. **Architecture**: System architecture, monorepo directory layout, client-server contract, error propagation, network resilience, and state management.
    5. **Technology Stack**: Specific frameworks, libraries, runtime versions, build tools, and justifications.
    6. **Backend**: Server runtime, framework, routing structure, middleware (CORS, body parsing, request logging), validation schemas, Firestore integration, and resilient error handling.
-   7. **Frontend**: UI framework, components, styling, client state, optimistic mutations, API client, fallback states, and toast notifications.
+   7. **Frontend**: UI framework, components, styling, client state, optimistic mutations, API client with non-JSON/HTML response guard, fallback states, and toast notifications.
    8. **Data Model**: Entities, Firestore collection structures, document schemas, field types, default values, and indexing rules.
    9. **API**: REST endpoints, request/response JSON payloads, query parameters, HTTP status codes, and standardized error schemas.
    10. **Configuration**: Environment variables, runtime ports, profiles, secrets management, and local fallback strategies.
@@ -48,6 +48,7 @@ You are tasked with building, testing, hardening, and deploying the complete, pr
   - Mobile-first, touch-friendly UI optimized for one-handed phone use in a grocery store aisle.
   - Optimistic UI updates with toast notifications for actions, rollbacks, and network errors.
   - Dark mode and light mode support with system preference detection and manual toggle.
+  - Clear connectivity and configuration status indicators with descriptive diagnostic banners if the backend is unreachable or returning unexpected responses.
 
 ---
 
@@ -57,13 +58,13 @@ You are tasked with building, testing, hardening, and deploying the complete, pr
 - **Frontend**:
   - Framework: React 18+ with TypeScript using Vite (`@vitejs/plugin-react`).
   - Styling: Tailwind CSS with Lucide React icons.
-  - State & Data Fetching: TanStack Query (React Query) or custom hook with optimistic cache updates.
+  - State & Data Fetching: Custom reactive hooks or TanStack Query (React Query) with optimistic cache updates.
   - Hosting: Vercel (Scope / Team: `noam-projects2`, Project Name: `grocery-list-app-ui`).
 - **Backend**:
   - Runtime: Node.js 20+ (TypeScript) with Express.
   - Cloud Database: Google Cloud Firestore (`@google-cloud/firestore`).
   - Validation: Zod for request body and query validation.
-  - Testing: Jest with `ts-jest` and `supertest` (or Vitest). Must maintain a single configuration source to prevent config collision.
+  - Testing: Jest with `ts-jest` and `supertest`. Must maintain a single configuration source (`jest.config.js`) to prevent config collisions.
   - Hosting: Google Cloud Run (Project: `ai-learning-499409`, Service Name: `grocery-list-app-api`, Region: `us-central1`).
 - **DevOps & CI/CD**:
   - GitHub Actions automated deployment workflows for backend (Google Cloud Run source deploy) and frontend (Vercel CLI).
@@ -99,7 +100,7 @@ grocery-list-app/
 │   │   ├── routes/
 │   │   │   ├── health.routes.ts
 │   │   │   ├── items.routes.ts
-│   │   │   └── lists.routes.ts
+│   │   └── lists.routes.ts
 │   │   └── server.ts
 │   └── tests/
 │       ├── health.test.ts
@@ -246,77 +247,129 @@ app.listen(PORT, HOST, () => {
 
 ### Standards & Middleware:
 - CORS middleware configured to accept `*`, `http://localhost:*`, all Vercel deployment preview domains (`https://*.vercel.app`), and production custom domains.
-- `express.json()` body parser.
-- Centralized error handler returning `{ "error": { "code": string, "message": string } }` with appropriate HTTP status codes (400, 404, 500).
+- Express json body parser: `app.use(express.json())`.
+- Centralized error handler returning `{ "error": { "code": string, "message": string } }` with appropriate HTTP status codes (400, 404, 500) and explicit `Content-Type: application/json`.
 
 ---
 
-## 6. Frontend Specifications & User Interface
+## 6. Frontend Specifications & HTML/JSON Parsing Defense
 
-- **Component Hierarchy & UX**:
-  - `Header`: App branding, active list selector dropdown, modal trigger for new list, theme toggle (dark/light).
-  - `FilterBar`: Search input with quick clear, category filter pills, status filter tabs (`All`, `Active`, `Done`), sort dropdown.
-  - `AddItemForm`: Quick item entry with instant category inference based on item name keywords, quantity stepper, unit selector, priority picker.
-  - `GroceryItemCard`:
-    - Large tap target checkbox (min 44x44px touch area) for grocery aisle operation.
-    - Strikethrough style for completed items.
-    - Category badge with color-coded chip.
-    - Quantity/unit indicator and stepper (`+`/`-`).
-    - Edit and delete actions.
-  - `BatchActionsBar`: Appears when completed items exist, showing item count and a "Clear Completed" button.
-  - `EmptyState`: Contextual feedback for empty lists or zero search results.
-- **Client Routing & Single-Page Application (SPA) Resilience**:
-  - `frontend/vercel.json` must configure SPA rewrites cleanly to prevent 404 errors on browser page reloads:
-    ```json
-    {
-      "rewrites": [
-        { "source": "/(.*)", "destination": "/index.html" }
-      ]
-    }
-    ```
-- **Optimistic State Management**:
-  - Toggling items immediately reflects in the UI. If the API request fails, state rolls back with an error toast notification.
-- **TypeScript & Vite Environmental Typing (`import.meta.env`)**:
-  - To prevent TypeScript compile errors during `tsc && vite build` (such as `error TS2339: Property 'env' does not exist on type 'ImportMeta'`), the project MUST include `frontend/src/vite-env.d.ts` with Vite client type definitions:
-    ```typescript
-    /// <reference types="vite/client" />
+### Critical Issue Prevention: `Unexpected token '<', "<!doctype "... is not valid JSON`
+This error occurs in web SPAs when client fetch calls request an invalid or relative endpoint path (e.g., `/api/...`) on the frontend host instead of the backend API, or when `VITE_API_URL` is empty, undefined, or missing at build time. Because Vercel has an SPA catch-all rewrite rule (`/(.*) -> /index.html`), any request that misses a real backend endpoint returns Vercel's `index.html` (which begins with `<!doctype html>`) with HTTP 200. Calling `.json()` on that response causes an immediate syntax crash.
 
-    interface ImportMetaEnv {
-      readonly VITE_API_URL?: string;
-    }
+#### Mandatory Frontend Countermeasures:
+1. **Defensive API Client Implementation (`frontend/src/api/client.ts`)**:
+   - The API client must inspect `response.headers.get('content-type')` before attempting to parse JSON.
+   - If the response is not JSON or begins with `<!doctype`, read the response as text, intercept the error, and throw a descriptive, user-friendly exception:
+     `"Backend returned HTML instead of JSON. Ensure VITE_API_URL is properly configured to point to the Cloud Run API."`
+   - Explicitly define and normalize `API_BASE_URL`:
+     ```typescript
+     // src/api/client.ts
+     const rawApiUrl = import.meta.env.VITE_API_URL;
+     export const API_BASE_URL = (rawApiUrl && rawApiUrl.trim() !== '')
+       ? rawApiUrl.replace(/\/+$/, '')
+       : (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+           ? 'http://localhost:8080'
+           : '');
 
-    interface ImportMeta {
-      readonly env: ImportMetaEnv;
-    }
-    ```
-  - In `frontend/tsconfig.json`, include `"types": ["vite/client"]` under `compilerOptions` and set `"skipLibCheck": true`:
-    ```json
-    {
-      "compilerOptions": {
-        "target": "ES2020",
-        "useDefineForClassFields": true,
-        "lib": ["ES2020", "DOM", "DOM.Iterable"],
-        "module": "ESNext",
-        "skipLibCheck": true,
-        "moduleResolution": "bundler",
-        "allowImportingTsExtensions": false,
-        "resolveJsonModule": true,
-        "isolatedModules": true,
-        "noEmit": true,
-        "jsx": "react-jsx",
-        "strict": true,
-        "noUnusedLocals": false,
-        "noUnusedParameters": false,
-        "noFallthroughCasesInSwitch": true,
-        "types": ["vite/client"]
-      },
-      "include": ["src"]
-    }
-    ```
-  - In `src/api/client.ts`, safely read the environment variable:
-    ```typescript
-    const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/+$/, '');
-    ```
+     export async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+       const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+       
+       if (!API_BASE_URL && !endpoint.startsWith('http')) {
+         throw new Error(
+           'VITE_API_URL is not configured. Please set the Cloud Run API URL in Vercel environment variables.'
+         );
+       }
+
+       const response = await fetch(url, {
+         ...options,
+         headers: {
+           'Accept': 'application/json',
+           'Content-Type': 'application/json',
+           ...options.headers,
+         },
+       });
+
+       const contentType = response.headers.get('content-type') || '';
+       if (!contentType.includes('application/json')) {
+         const rawText = await response.text();
+         if (rawText.trim().toLowerCase().startsWith('<!doctype') || rawText.includes('<html')) {
+           throw new Error(
+             `Received HTML instead of JSON from ${url}. Check that VITE_API_URL points to the deployed Cloud Run service and not the static frontend host.`
+           );
+         }
+         throw new Error(`Unexpected non-JSON response from ${url}: ${rawText.slice(0, 100)}`);
+       }
+
+       const data = await response.json();
+       if (!response.ok) {
+         throw new Error(data?.error?.message || `API error with status ${response.status}`);
+       }
+       return data as T;
+     }
+     ```
+2. **UI Diagnostic Warning Banner**:
+   - If `!API_BASE_URL` in a deployed environment or if the client catches the HTML/Doctype error, display a clean, non-intrusive banner or toast informing the user to set the backend `VITE_API_URL`.
+
+### Component Hierarchy & UX:
+- `Header`: App branding, active list selector dropdown, modal trigger for new list, theme toggle (dark/light), backend health indicator.
+- `FilterBar`: Search input with quick clear, category filter pills, status filter tabs (`All`, `Active`, `Done`), sort dropdown.
+- `AddItemForm`: Quick item entry with instant category inference based on item name keywords, quantity stepper, unit selector, priority picker.
+- `GroceryItemCard`:
+  - Large tap target checkbox (min 44x44px touch area) for grocery aisle operation.
+  - Strikethrough style for completed items.
+  - Category badge with color-coded chip.
+  - Quantity/unit indicator and stepper (`+`/`-`).
+  - Edit and delete actions.
+- `BatchActionsBar`: Appears when completed items exist, showing item count and a "Clear Completed" button.
+- `EmptyState`: Contextual feedback for empty lists or zero search results.
+
+### TypeScript & Vite Environmental Typing (`import.meta.env`):
+- To prevent TypeScript compile errors during `tsc && vite build` (such as `error TS2339: Property 'env' does not exist on type 'ImportMeta'`), the project MUST include `frontend/src/vite-env.d.ts` with Vite client type definitions:
+  ```typescript
+  /// <reference types="vite/client" />
+
+  interface ImportMetaEnv {
+    readonly VITE_API_URL?: string;
+  }
+
+  interface ImportMeta {
+    readonly env: ImportMetaEnv;
+  }
+  ```
+- In `frontend/tsconfig.json`, include `"types": ["vite/client"]` under `compilerOptions` and set `"skipLibCheck": true`:
+  ```json
+  {
+    "compilerOptions": {
+      "target": "ES2020",
+      "useDefineForClassFields": true,
+      "lib": ["ES2020", "DOM", "DOM.Iterable"],
+      "module": "ESNext",
+      "skipLibCheck": true,
+      "moduleResolution": "bundler",
+      "allowImportingTsExtensions": false,
+      "resolveJsonModule": true,
+      "isolatedModules": true,
+      "noEmit": true,
+      "jsx": "react-jsx",
+      "strict": true,
+      "noUnusedLocals": false,
+      "noUnusedParameters": false,
+      "noFallthroughCasesInSwitch": true,
+      "types": ["vite/client"]
+    },
+    "include": ["src"]
+  }
+  ```
+
+### Vercel Routing Configuration (`frontend/vercel.json`):
+```json
+{
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+```
 
 ---
 
@@ -372,7 +425,7 @@ VITE_API_URL=https://grocery-list-app-api-XXXXXXXXXX-uc.a.run.app
 
 ### Frontend Testing:
 - Component tests using Vitest (or Jest) and React Testing Library.
-- Validation of item addition, checkbox toggle, category filtering, and empty states.
+- Test that `apiRequest` handles JSON responses normally and throws a descriptive error when an HTML string or Doctype is encountered.
 - Both `backend/package.json` and `frontend/package.json` must include an executable `npm test` script that passes cleanly in CI without network access or ambiguous configuration.
 
 ---
@@ -528,11 +581,9 @@ jobs:
 
 #### Mandatory Vercel Build & Monorepo Rules:
 1. **Explicit Project Linking**:
-   - Vercel CLI builds fail when a project is not pre-linked or when org/project IDs mismatch.
    - Always run `npx vercel link --yes --project grocery-list-app-ui --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }}` before `vercel pull` to write the `.vercel/project.json` linking file deterministically inside `frontend/`.
 2. **Monorepo Directory Isolation**:
-   - The frontend resides strictly in `frontend/`.
-   - All Vercel CLI steps must execute with working directory set to `frontend/`.
+   - The frontend resides strictly in `frontend/`. All Vercel CLI steps must execute with working directory set to `frontend/`.
 3. **TypeScript Build Guard & Vite Client Declarations**:
    - Ensure `frontend/src/vite-env.d.ts` is committed and references `<reference types="vite/client" />`.
    - Ensure `frontend/tsconfig.json` has `"types": ["vite/client"]` and `"skipLibCheck": true` so `tsc && vite build` succeeds without `Property 'env' does not exist on type 'ImportMeta'` errors.
@@ -612,10 +663,11 @@ jobs:
 
 ---
 
-### 3. Deployment Troubleshooting & Failure Prevention Matrix
+### 3. Deployment & Runtime Troubleshooting Matrix
 
 | Failure Symptom | Underlying Cause | Mandatory Remedy |
 | :--- | :--- | :--- |
+| **Frontend UI Runtime**: *`Unexpected token '<', "<!doctype "... is not valid JSON`* | Client fetch requested an unhandled relative path or `VITE_API_URL` was unset/empty in production. Vercel SPA rewrite returned `index.html` with HTTP 200 instead of backend JSON. | 1. In `src/api/client.ts`, inspect `response.headers.get('content-type')` before `response.json()`. If it starts with `<!doctype` or is HTML, throw an explicit error explaining `VITE_API_URL` misconfiguration.<br>2. Ensure `VITE_API_URL` is set to the Cloud Run service URL in Vercel environment variables and GitHub Actions secrets.<br>3. Render a helpful UI banner if the API base URL is missing. |
 | **Backend CI Test**: *`● Multiple configurations found: * jest.config.js * jest key in package.json. Implicit config resolution does not allow multiple configuration files.`* | Both a `jest.config.js` file and a `"jest"` key in `backend/package.json` exist simultaneously. | Maintain only a single configuration source: delete the `"jest"` block from `backend/package.json` in favor of `backend/jest.config.js`. In `backend/package.json`, set `"test": "jest --config jest.config.js --passWithNoTests"`. |
 | **Cloud Run**: *`Container failed to start. Failed to listen on PORT 8080 within timeout.`* | Server bound to `localhost` / `127.0.0.1` instead of `0.0.0.0`. | Explicitly call `app.listen(PORT, '0.0.0.0')` in `server.ts`. |
 | **Cloud Run**: *`Deploy failed: PORT env variable cannot be set.`* | Setting `PORT=8080` in `--set-env-vars`. | Remove `PORT` from `--set-env-vars`. Only pass the `--port 8080` CLI flag. |
@@ -631,95 +683,35 @@ jobs:
 
 ## 10. Execution Order & Verification
 
-1. **Author `SPEC.md`**: Create the comprehensive 12-section `SPEC.md` covering all features, data models, endpoints, build configurations, test-runner configuration, and deployment strategies.
+1. **Author `SPEC.md`**: Create the comprehensive 12-section `SPEC.md` covering all features, data models, endpoints, build configurations, test-runner configuration, response verification defense, and deployment strategies.
 2. **Backend Construction**:
    - Create `backend/package.json`, `tsconfig.json`, `backend/jest.config.js`, and `.gcloudignore`.
    - Strictly avoid defining a `"jest"` key in `backend/package.json` while `jest.config.js` is present; set `"test": "jest --config jest.config.js --passWithNoTests"`.
    - Ensure dependencies contain `typescript` and Express type packages to prevent buildpack compile failures.
    - Implement Express server with `0.0.0.0` host binding and port fallback `8080`.
    - Implement Firestore client targeting GCP project `ai-learning-499409` and collection `grocery-list-app`, with mock repository fallback.
-   - Implement Express routes, Zod validation, and controllers.
+   - Implement Express routes, Zod validation, and controllers with JSON error responses.
    - Add backend test suites and verify `npm test` passes without configuration collisions.
 3. **Frontend Construction**:
    - Initialize Vite React TypeScript project in `frontend/`.
    - Add `frontend/src/vite-env.d.ts` with `/// <reference types="vite/client" />` and configure `frontend/tsconfig.json` with `"types": ["vite/client"]` and `"skipLibCheck": true` to eliminate `Property 'env' does not exist on type 'ImportMeta'` errors.
+   - Implement defensive `src/api/client.ts` verifying `content-type: application/json` and detecting HTML doctype fallbacks with descriptive errors.
    - Configure Tailwind CSS, Lucide icons, and `vercel.json` SPA rewrite rules.
-   - Implement list switcher, category filters, item stepper, optimistic updates, and API client.
-   - Add frontend unit tests and verify `npm test` passes.
+   - Implement list switcher, category filters, item stepper, optimistic updates, and diagnostic banners.
+   - Add frontend unit tests verifying both successful JSON parsing and defensive rejection of HTML responses.
 4. **Deployments & Workflows**:
    - Write `.github/workflows/deploy-backend.yml` strictly following Google Cloud Run source-deploy constraints (source deploy, no docker, `--port 8080`, no PORT in `--set-env-vars`, targeting project `ai-learning-499409` and service `grocery-list-app-api`).
-   - Write `.github/workflows/deploy-frontend.yml` strictly targeting Vercel team `noam-projects2` and project `grocery-list-app-ui` with explicit pre-linking (`vercel link`).
-5. **Final Review**: Validate that code, tests, and configuration directly mirror `SPEC.md`. Ensure all deployment and CI failure vectors are eliminated.
+   - Write `.github/workflows/deploy-frontend.yml` strictly targeting Vercel team `noam-projects2` and project `grocery-list-app-ui` with explicit pre-linking (`vercel link`) and `VITE_API_URL` environment injection.
+5. **Final Review**: Validate that code, tests, and configuration directly mirror `SPEC.md`. Ensure all deployment and runtime failure vectors are eliminated.
+
 
 ---
 
 ## User Prompt History
 
-### Prompt 1
-You are Antigravity CLI on Cloud building the project 'grocery-list-app'. MANDATORY DEVELOPMENT WORKFLOW & SPECIFICATION DISCIPLINE:
-1. SPEC FIRST: Create or update `SPEC.md` in the project root directory FIRST before implementing any code. SPEC.md must capture the complete, current state of the application containing ALL 12 MANDATORY SECTIONS:
-   ## 1. Overview
-   ## 2. Requirements
-   ## 3. User Experience
-   ## 4. Architecture
-   ## 5. Technology Stack
-   ## 6. Backend
-   ## 7. Frontend
-   ## 8. Data Model
-   ## 9. API
-   ## 10. Configuration
-   ## 11. Testing
-   ## 12. Deployment
-   No section 1 to 12 may be omitted.
-2. CODE AS REFLECTION OF SPEC: Write complete, production-ready application code and automated tests (in tests/) strictly conforming to SPEC.md. Never write code that deviates from or contradicts SPEC.md.
-3. Deployment Naming Conventions & Rules (if deployment requested):
-   - Backend Cloud Run service name: 'grocery-list-app-api' (MUST be Source type deployment with `gcloud run deploy grocery-list-app-api --source . ...`; do NOT use docker build/push or --image; never set PORT in --set-env-vars)
-   - Frontend Vercel project name: 'grocery-list-app-ui'
-The backend platform will automatically commit and publish your generated files to GitHub when you finish.
+### Prompt 1: Initial Application Architecture & Build
+- Initial setup and specification of grocery-list-app, Cloud Run backend source deployment, Vercel frontend deployment, and tests.
 
-### Prompt 2
-still, both deployments failed...
-
-### Prompt 3
-there is an error with deploying to vercel: Running "vercel build"
-Vercel CLI 62.7.0
-Installing dependencies...
-added 137 packages in 15s
-26 packages are looking for funding
-  run `npm fund` for details
-npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
-npm warn install-scripts   esbuild@0.21.5 (postinstall: node install.js)
-npm warn install-scripts
-npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
-Running "npm run build"
-> grocery-list-app-ui@1.0.0 build
-> tsc && vite build
-src/api/client.ts(3,30): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
-src/api/client.ts(4,17): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
-Error: Command "npm run build" exited with 2
-
-### Prompt 4
-there is an error with deploying to cloudrun: Run npm test
-
-> grocery-list-app-api@1.0.0 test
-> jest --passWithNoTests
-
-● Multiple configurations found:
-
-    * /home/runner/work/grocery-list-app/grocery-list-app/backend/jest.config.js
-    * `jest` key in /home/runner/work/grocery-list-app/grocery-list-app/backend/package.json
-
-  Implicit config resolution does not allow multiple configuration files.
-  Either remove unused config files or select one explicitly with `--config`.
-
-  Configuration Documentation:
-  https://jestjs.io/docs/configuration
-
-npm error Lifecycle script `test` failed with error:
-npm error code 1
-npm error path /home/runner/work/grocery-list-app/grocery-list-app/backend
-npm error workspace grocery-list-app-api@1.0.0
-npm error location /home/runner/work/grocery-list-app/grocery-list-app/backend
-npm error command failed
-npm error command sh -c jest --passWithNoTests
-Error: Process completed with exit code 1.
+### Prompt 2: Fix UI HTML Doctype JSON Parsing Error
+- User Instruction: "in the ui i am getting this error: Unexpected token '<', "<!doctype "... is not valid JSON"
+- Action: Implement defensive API client response handling, verify Content-Type before parsing JSON, detect `<!doctype` HTML fallbacks, add interactive UI diagnostic configuration banner, Vite dev server API proxy, and backend 404 JSON catch-all handler.

@@ -134,6 +134,43 @@ class TestSpecAndWorkflowCompliance(unittest.TestCase):
         test_script = backend_pkg.get("scripts", {}).get("test", "")
         self.assertIn("--config jest.config.js", test_script, "test script must explicitly specify --config jest.config.js")
 
+    def test_html_doctype_response_guard(self):
+        """Verifies fix for UI error: Unexpected token '<', '<!doctype '... is not valid JSON."""
+        client_ts_path = os.path.join(self.root_dir, "frontend", "src", "api", "client.ts")
+        self.assertTrue(os.path.exists(client_ts_path), "frontend/src/api/client.ts must exist")
+        with open(client_ts_path, "r", encoding="utf-8") as f:
+            client_content = f.read()
+
+        # Must guard against HTML doctype responses before JSON parse
+        self.assertIn("HtmlResponseError", client_content, "Must define HtmlResponseError class")
+        self.assertIn("isHtmlResponseError", client_content, "Must export isHtmlResponseError helper")
+        self.assertIn("<!doctype", client_content, "Must explicitly detect <!doctype responses")
+        self.assertIn("content-type", client_content.lower(), "Must inspect content-type header before parsing")
+        self.assertIn("API_BASE", client_content, "Must export API_BASE")
+        self.assertIn("API_BASE_URL", client_content, "Must export API_BASE_URL")
+
+        # Diagnostic banner component
+        banner_path = os.path.join(self.root_dir, "frontend", "src", "components", "DiagnosticBanner.tsx")
+        self.assertTrue(os.path.exists(banner_path), "frontend/src/components/DiagnosticBanner.tsx must exist")
+        with open(banner_path, "r", encoding="utf-8") as f:
+            banner_content = f.read()
+        self.assertIn("DiagnosticBanner", banner_content)
+        self.assertIn("VITE_API_URL", banner_content)
+
+    def test_vite_dev_proxy_and_backend_404_handler(self):
+        """Verifies Vite dev proxy and Express 404 JSON catch-all handler."""
+        vite_config_path = os.path.join(self.root_dir, "frontend", "vite.config.ts")
+        with open(vite_config_path, "r", encoding="utf-8") as f:
+            vite_conf = f.read()
+        self.assertIn("proxy", vite_conf, "vite.config.ts must configure dev server proxy")
+        self.assertIn("8080", vite_conf, "vite.config.ts proxy must route to backend port 8080")
+
+        app_ts_path = os.path.join(self.root_dir, "backend", "src", "app.ts")
+        with open(app_ts_path, "r", encoding="utf-8") as f:
+            app_content = f.read()
+        self.assertIn("NOT_FOUND", app_content, "backend app.ts must have 404 JSON catch-all handler")
+        self.assertIn("res.status(404)", app_content, "backend app.ts must return HTTP 404 JSON status")
+
 
 
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { api } from '../api/client';
+import { api, isHtmlResponseError } from '../api/client';
 import { GroceryItem, GroceryList, StatusFilter, SortOption } from '../types';
 
 export function suggestCategory(name: string): string {
@@ -27,12 +27,82 @@ export function suggestCategory(name: string): string {
   return 'Other';
 }
 
+const DEFAULT_DEMO_LIST: GroceryList = {
+  id: 'demo_list_weekly',
+  name: 'Weekly Groceries (Demo)',
+  description: 'Interactive offline sample list',
+  isDefault: true,
+  itemCount: 4,
+  completedCount: 1,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString()
+};
+
+const DEFAULT_DEMO_ITEMS: GroceryItem[] = [
+  {
+    id: 'demo_item_1',
+    listId: 'demo_list_weekly',
+    name: 'Organic Whole Milk',
+    quantity: 1,
+    unit: 'gallon',
+    category: 'Dairy & Eggs',
+    priority: 'high',
+    notes: 'Check expiration date',
+    isCompleted: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'demo_item_2',
+    listId: 'demo_list_weekly',
+    name: 'Honeycrisp Apples',
+    quantity: 6,
+    unit: 'pcs',
+    category: 'Produce',
+    priority: 'medium',
+    notes: 'Crisp and red',
+    isCompleted: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'demo_item_3',
+    listId: 'demo_list_weekly',
+    name: 'Artisan Sourdough Bread',
+    quantity: 1,
+    unit: 'loaf',
+    category: 'Bakery',
+    priority: 'medium',
+    notes: 'Freshly baked',
+    isCompleted: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'demo_item_4',
+    listId: 'demo_list_weekly',
+    name: 'Extra Virgin Olive Oil',
+    quantity: 1,
+    unit: 'bottle',
+    category: 'Pantry',
+    priority: 'low',
+    notes: 'Cold pressed',
+    isCompleted: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
 export function useGroceryList() {
   const [lists, setLists] = useState<GroceryList[]>([]);
   const [activeListId, setActiveListId] = useState<string>('');
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Diagnostic states
+  const [isHtmlError, setIsHtmlError] = useState<boolean>(false);
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
 
   // Filters & Views
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -41,12 +111,23 @@ export function useGroceryList() {
   const [sortOption, setSortOption] = useState<SortOption>('aisle');
   const [isAisleView, setIsAisleView] = useState<boolean>(true);
 
+  // Activate Demo Mode
+  const activateDemoMode = useCallback(() => {
+    setIsDemoMode(true);
+    setLists([DEFAULT_DEMO_LIST]);
+    setActiveListId(DEFAULT_DEMO_LIST.id);
+    setItems(DEFAULT_DEMO_ITEMS);
+  }, []);
+
   // Fetch Lists
   const loadLists = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+      setIsHtmlError(false);
+
       const fetchedLists = await api.getLists();
+      setIsDemoMode(false);
       setLists(fetchedLists);
 
       if (fetchedLists.length > 0) {
@@ -58,33 +139,44 @@ export function useGroceryList() {
         });
       }
     } catch (err: any) {
+      const htmlErr = isHtmlResponseError(err);
+      setIsHtmlError(htmlErr);
       setError(err.message || 'Failed to load grocery lists');
+
+      // Fallback to Demo Mode so the user can immediately interact with the UI
+      if (lists.length === 0) {
+        activateDemoMode();
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [lists.length, activateDemoMode]);
 
   // Fetch Items for active list
   const loadItems = useCallback(async (listId: string) => {
     if (!listId) return;
+    if (isDemoMode) return;
+
     try {
       setError(null);
       const fetchedItems = await api.getItems({ listId });
       setItems(fetchedItems);
     } catch (err: any) {
+      const htmlErr = isHtmlResponseError(err);
+      setIsHtmlError(htmlErr);
       setError(err.message || 'Failed to load grocery items');
     }
-  }, []);
+  }, [isDemoMode]);
 
   useEffect(() => {
     loadLists();
   }, [loadLists]);
 
   useEffect(() => {
-    if (activeListId) {
+    if (activeListId && !isDemoMode) {
       loadItems(activeListId);
     }
-  }, [activeListId, loadItems]);
+  }, [activeListId, isDemoMode, loadItems]);
 
   const activeList = useMemo(() => {
     return lists.find((l) => l.id === activeListId) || null;
@@ -101,21 +193,25 @@ export function useGroceryList() {
       curr.map((i) => (i.id === itemId ? { ...i, isCompleted: newCompleted } : i))
     );
 
+    // Update list counts
+    setLists((curr) =>
+      curr.map((l) =>
+        l.id === activeListId
+          ? {
+              ...l,
+              completedCount: Math.max(0, (l.completedCount || 0) + (newCompleted ? 1 : -1))
+            }
+          : l
+      )
+    );
+
+    if (isDemoMode) return;
+
     try {
       await api.updateItem(itemId, { isCompleted: newCompleted });
-      // Update list counts
-      setLists((curr) =>
-        curr.map((l) =>
-          l.id === activeListId
-            ? {
-                ...l,
-                completedCount: (l.completedCount || 0) + (newCompleted ? 1 : -1)
-              }
-            : l
-        )
-      );
     } catch (err: any) {
       setItems(prevItems);
+      setIsHtmlError(isHtmlResponseError(err));
       setError('Failed to update item completion: ' + err.message);
     }
   };
@@ -133,10 +229,13 @@ export function useGroceryList() {
       curr.map((i) => (i.id === itemId ? { ...i, quantity: newQty } : i))
     );
 
+    if (isDemoMode) return;
+
     try {
       await api.updateItem(itemId, { quantity: newQty });
     } catch (err: any) {
       setItems(prevItems);
+      setIsHtmlError(isHtmlResponseError(err));
       setError('Failed to update quantity: ' + err.message);
     }
   };
@@ -152,8 +251,8 @@ export function useGroceryList() {
   }) => {
     if (!activeListId) return;
 
-    const tempId = 'temp_' + Date.now();
-    const tempItem: GroceryItem = {
+    const tempId = 'item_' + Date.now();
+    const newItem: GroceryItem = {
       id: tempId,
       listId: activeListId,
       name: data.name,
@@ -167,7 +266,16 @@ export function useGroceryList() {
       updatedAt: new Date().toISOString()
     };
 
-    setItems((curr) => [tempItem, ...curr]);
+    setItems((curr) => [newItem, ...curr]);
+    setLists((curr) =>
+      curr.map((l) =>
+        l.id === activeListId
+          ? { ...l, itemCount: (l.itemCount || 0) + 1 }
+          : l
+      )
+    );
+
+    if (isDemoMode) return;
 
     try {
       const created = await api.createItem({
@@ -175,15 +283,16 @@ export function useGroceryList() {
         listId: activeListId
       });
       setItems((curr) => curr.map((i) => (i.id === tempId ? created : i)));
+    } catch (err: any) {
+      setItems((curr) => curr.filter((i) => i.id !== tempId));
       setLists((curr) =>
         curr.map((l) =>
           l.id === activeListId
-            ? { ...l, itemCount: (l.itemCount || 0) + 1 }
+            ? { ...l, itemCount: Math.max(0, (l.itemCount || 0) - 1) }
             : l
         )
       );
-    } catch (err: any) {
-      setItems((curr) => curr.filter((i) => i.id !== tempId));
+      setIsHtmlError(isHtmlResponseError(err));
       setError('Failed to add item: ' + err.message);
     }
   };
@@ -194,25 +303,29 @@ export function useGroceryList() {
     const itemToDelete = items.find((i) => i.id === itemId);
     setItems((curr) => curr.filter((i) => i.id !== itemId));
 
+    if (itemToDelete) {
+      setLists((curr) =>
+        curr.map((l) =>
+          l.id === activeListId
+            ? {
+                ...l,
+                itemCount: Math.max(0, (l.itemCount || 0) - 1),
+                completedCount: itemToDelete.isCompleted
+                  ? Math.max(0, (l.completedCount || 0) - 1)
+                  : l.completedCount
+              }
+            : l
+        )
+      );
+    }
+
+    if (isDemoMode) return;
+
     try {
       await api.deleteItem(itemId);
-      if (itemToDelete) {
-        setLists((curr) =>
-          curr.map((l) =>
-            l.id === activeListId
-              ? {
-                  ...l,
-                  itemCount: Math.max(0, (l.itemCount || 0) - 1),
-                  completedCount: itemToDelete.isCompleted
-                    ? Math.max(0, (l.completedCount || 0) - 1)
-                    : l.completedCount
-                }
-              : l
-          )
-        );
-      }
     } catch (err: any) {
       setItems(prevItems);
+      setIsHtmlError(isHtmlResponseError(err));
       setError('Failed to delete item: ' + err.message);
     }
   };
@@ -221,42 +334,76 @@ export function useGroceryList() {
   const clearCompleted = async () => {
     if (!activeListId) return;
     const prevItems = [...items];
+    const completedCount = items.filter((i) => i.isCompleted).length;
     setItems((curr) => curr.filter((i) => !i.isCompleted));
+
+    setLists((curr) =>
+      curr.map((l) =>
+        l.id === activeListId
+          ? {
+              ...l,
+              itemCount: Math.max(0, (l.itemCount || 0) - completedCount),
+              completedCount: 0
+            }
+          : l
+      )
+    );
+
+    if (isDemoMode) return;
 
     try {
       await api.clearCompleted(activeListId);
-      setLists((curr) =>
-        curr.map((l) =>
-          l.id === activeListId
-            ? {
-                ...l,
-                itemCount: Math.max(0, (l.itemCount || 0) - (l.completedCount || 0)),
-                completedCount: 0
-              }
-            : l
-        )
-      );
     } catch (err: any) {
       setItems(prevItems);
+      setIsHtmlError(isHtmlResponseError(err));
       setError('Failed to clear completed items: ' + err.message);
     }
   };
 
   // Create List
   const createList = async (name: string, description?: string) => {
+    if (isDemoMode) {
+      const demoId = 'list_' + Date.now();
+      const newList: GroceryList = {
+        id: demoId,
+        name: name.trim(),
+        description: description?.trim() || '',
+        isDefault: false,
+        itemCount: 0,
+        completedCount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      setLists((curr) => [...curr, newList]);
+      setActiveListId(demoId);
+      return newList;
+    }
+
     try {
       const newList = await api.createList(name, description);
       setLists((curr) => [...curr, newList]);
       setActiveListId(newList.id);
       return newList;
     } catch (err: any) {
+      setIsHtmlError(isHtmlResponseError(err));
       setError('Failed to create list: ' + err.message);
       throw err;
     }
   };
 
-  // Delete Current List
+  // Delete List
   const deleteList = async (listId: string) => {
+    if (isDemoMode) {
+      const remaining = lists.filter((l) => l.id !== listId);
+      setLists(remaining);
+      if (remaining.length > 0) {
+        setActiveListId(remaining[0].id);
+      } else {
+        activateDemoMode();
+      }
+      return;
+    }
+
     try {
       await api.deleteList(listId);
       const remaining = lists.filter((l) => l.id !== listId);
@@ -267,6 +414,7 @@ export function useGroceryList() {
         await loadLists();
       }
     } catch (err: any) {
+      setIsHtmlError(isHtmlResponseError(err));
       setError('Failed to delete list: ' + err.message);
     }
   };
@@ -342,6 +490,10 @@ export function useGroceryList() {
     loading,
     error,
     setError,
+    isHtmlError,
+    setIsHtmlError,
+    isDemoMode,
+    setIsDemoMode,
     statusFilter,
     setStatusFilter,
     categoryFilter,

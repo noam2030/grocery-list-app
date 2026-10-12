@@ -230,6 +230,7 @@ grocery-list-app/
 ### Middleware
 - `cors.ts`: Permissive CORS allowing cross-origin requests from Vercel deployments (`*` or configured origins) with credentials and header authorization.
 - `express.json()`: Request payload parsing limited to 2MB.
+- `404 JSON Catch-All Middleware`: Unmatched backend routes are intercepted prior to error handling to return `{ "error": { "code": "NOT_FOUND", "message": "Endpoint not found" } }` with explicit `Content-Type: application/json`, preventing Express from emitting default HTML error pages.
 - `errorHandler.ts`: Standardized error payload formatting:
   ```json
   {
@@ -282,6 +283,10 @@ The `firestore.ts` module checks for Google Cloud environment or Application Def
    - Graphic and instructions when list is empty or search yields no matches.
 7. **`ListSelectorModal`**:
    - Modal for listing, creating, switching, and deleting shopping lists.
+8. **`DiagnosticBanner`**:
+   - Visual status banner rendered when the backend returns HTML, when `VITE_API_URL` is unconfigured, or when connectivity issues arise.
+   - Provides an inline API configuration panel allowing users to set a custom backend URL (persisted in `localStorage` under `freshcart_api_url`) and test connectivity.
+   - Includes a "Demo Mode" toggle that seamlessly falls back to local in-memory storage so users can explore and use the full application offline without JSON parsing crashes.
 
 ### Single-Page Application (SPA) Resilience & Routing
 - `frontend/vercel.json` configures client-side rewrite rules to ensure refreshing any route serves `/index.html`:
@@ -290,6 +295,38 @@ The `firestore.ts` module checks for Google Cloud environment or Application Def
     "rewrites": [
       { "source": "/(.*)", "destination": "/index.html" }
     ]
+  }
+  ```
+
+### HTML / Doctype Response Defense (`Unexpected token '<', "<!doctype "... is not valid JSON`)
+- **Vulnerability Context**:
+  When a single-page application requests relative paths (such as `/api/lists` or `/api/items`) on a static hosting platform like Vercel where SPA rewrites (`/(.*) -> /index.html`) are active, any unrouted endpoint returns the host's `index.html` file (beginning with `<!doctype html>`) with HTTP status `200 OK`. If the client executes `response.json()` unconditionally, the JavaScript engine throws:
+  `SyntaxError: Unexpected token '<', "<!doctype "... is not valid JSON`.
+- **Defensive API Client Implementation (`frontend/src/api/client.ts`)**:
+  1. **Content-Type Inspection**: Inspects `response.headers.get('content-type')` prior to parsing JSON.
+  2. **Doctype & HTML Interception**: If the response is not `application/json` or if the response text begins with `<!doctype` or contains `<html`, the client prevents calling `response.json()` and raises a descriptive, actionable error:
+     `"Backend returned HTML instead of JSON (received '<!doctype ...>'). Ensure VITE_API_URL is properly configured to point to your Cloud Run service (e.g. https://grocery-list-app-api-...a.run.app) and not the static frontend host."`
+  3. **Dynamic Base URL Resolution**:
+     - Precedence 1: Explicit user-configured URL stored in `localStorage.getItem('freshcart_api_url')`.
+     - Precedence 2: Environment variable `import.meta.env.VITE_API_URL`.
+     - Precedence 3: Local development fallback `http://localhost:8080` when `window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'`.
+     - Precedence 4: Relative fallback `''`.
+     - Both `API_BASE` and `API_BASE_URL` are consistently exported.
+  4. **Health Check Utility**: Exports `checkBackendHealth(url?: string)` to test endpoints (`/health` or `/api/health`) before switching configurations.
+  5. **Safe In-Memory Demo Fallback**: When HTML responses or connection errors are detected, `useGroceryList` activates Demo Mode with default seeded grocery lists and items, permitting full add, edit, toggle, quantity adjustment, and batch clear interactions without crashing.
+
+### Development Server Proxy (`frontend/vite.config.ts`)
+- In local development, `frontend/vite.config.ts` configures a proxy forwarding `/api` to the backend server (`http://localhost:8080`), ensuring local developers never receive `index.html` when making API requests:
+  ```typescript
+  server: {
+    port: 3000,
+    host: '0.0.0.0',
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true
+      }
+    }
   }
   ```
 
@@ -308,12 +345,7 @@ The `firestore.ts` module checks for Google Cloud environment or Application Def
   }
   ```
 - In `frontend/tsconfig.json`, `compilerOptions` MUST include `"types": ["vite/client"]` and `"skipLibCheck": true` to ensure the TypeScript compiler recognizes Vite's global augmentations.
-- In `frontend/src/api/client.ts`, access to `import.meta.env` is safely guarded with runtime fallbacks:
-  ```typescript
-  const API_BASE = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL
-    ? ((import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL || '').replace(/\/+$/, '')
-    : '';
-  ```
+- In `frontend/src/api/client.ts`, access to `import.meta.env` is safely guarded with runtime fallbacks and `API_BASE` is exported.
 
 ---
 
@@ -446,6 +478,18 @@ interface GroceryItem {
 - **Request Body**: `{ "listId": "list_weekly_groceries" }`
 - **Response `200 OK`**: `{ "success": true, "clearedCount": 3 }`
 
+#### 11. `ANY *` (404 Fallback)
+- **Response `404 Not Found`**:
+  ```json
+  {
+    "error": {
+      "code": "NOT_FOUND",
+      "message": "Endpoint GET /unmatched not found"
+    }
+  }
+  ```
+  Guarantees consistent JSON error delivery with `Content-Type: application/json` for any unmatched path.
+
 ---
 
 ## 10. Configuration
@@ -466,6 +510,12 @@ interface GroceryItem {
 |---|---|---|
 | `VITE_API_URL` | Base URL of deployed Cloud Run backend API | `http://localhost:8080` |
 
+### Runtime Frontend Configuration & Fallback Precedence
+1. **User Override**: If `freshcart_api_url` exists in `localStorage`, the UI directs all API requests to this target.
+2. **Build-Time Environment**: If `import.meta.env.VITE_API_URL` is set and non-empty, it is used.
+3. **Localhost Fallback**: If hostname is `localhost` or `127.0.0.1`, defaults to `http://localhost:8080`.
+4. **Offline Demo Fallback**: If backend connection yields HTML or network failure, the application activates in-memory Demo Mode with full local CRUD capabilities.
+
 ---
 
 ## 11. Testing
@@ -475,8 +525,15 @@ interface GroceryItem {
    - `lists.test.ts`: List creation, default seeding, retrieval with item counts, cascading deletion.
    - `items.test.ts`: Item creation with validation, quantity stepper, completion toggle, aisle category filtering, search, batch clear.
    - Authoritative Jest Configuration: Managed exclusively through `backend/jest.config.js` with `ts-jest` preset and explicit `--config jest.config.js` flag. The `"jest"` property is strictly omitted from `backend/package.json` to avoid Jest implicit multiple configurations conflict.
-2. **Contract & Mock Storage Tests (`tests/test_grocery_list_app.py`)**:
-   - Offline verification verifying all REST endpoints, headers, payload validation, workflow compliance, Jest single config compliance, and in-memory mock semantics without external dependencies.
+2. **Contract, Mock Storage & Defensive Guard Tests (`tests/test_grocery_list_app.py`)**:
+   - Verifies all 12 mandatory sections in `SPEC.md`.
+   - Validates Cloud Run source deployment workflow configuration and reserved `PORT` constraints.
+   - Validates Vercel team `noam-projects2` and project name `grocery-list-app-ui` configuration.
+   - Validates Vite client types, `ImportMetaEnv`, and defensive `API_BASE` export.
+   - Validates HTML doctype detection and content-type parsing guard in `frontend/src/api/client.ts`.
+   - Validates Vite dev server proxy configuration in `frontend/vite.config.ts`.
+   - Validates backend 404 JSON catch-all handler in `backend/src/app.ts`.
+   - Simulates grocery data store operations (CRUD, filtering, search, cascade delete, batch clear).
 3. **Execution Commands**:
    - Backend: `npm test` inside `backend/` (`jest --config jest.config.js --passWithNoTests`)
    - Frontend: `npm test` inside `frontend/`
@@ -575,5 +632,14 @@ interface GroceryItem {
      1. Removed the `"jest"` key from `backend/package.json` to eliminate ambiguous duplicate configuration definitions.
      2. Maintained the single authoritative `backend/jest.config.js` specifying the `ts-jest` preset, `tsconfig.json` transformation, and node environment.
      3. Updated `backend/package.json` script `"test"` to explicitly pass `--config jest.config.js --passWithNoTests`, ensuring unambiguous execution across all environments.
+10. **Failure Cause 10: Frontend UI Runtime `Unexpected token '<', "<!doctype "... is not valid JSON`**
+    - *Problem*: In deployed SPAs or local environments where `VITE_API_URL` is empty, unconfigured, or points to the frontend host, client fetch calls to relative paths (e.g., `/api/lists`) trigger Vercel's catch-all SPA rewrite rule (`/(.*) -> /index.html`). Vercel returns `index.html` (which starts with `<!doctype html>`) with HTTP status `200 OK`. When the frontend naively calls `response.json()`, the JavaScript engine aborts with:
+      `SyntaxError: Unexpected token '<', "<!doctype "... is not valid JSON`.
+    - *Resolution*:
+      1. Hardened `frontend/src/api/client.ts`: Inspects `response.headers.get('content-type')` before JSON parsing. If the response is not `application/json` or text begins with `<!doctype` or contains `<html`, reads the response as text and raises an explicit, user-friendly descriptive error pointing to `VITE_API_URL` configuration rather than crashing with an unhandled JSON parse syntax error.
+      2. Added dynamic API base resolution: Checks `localStorage.getItem('freshcart_api_url')`, then `import.meta.env.VITE_API_URL`, with localhost default `http://localhost:8080` and exports both `API_BASE` and `API_BASE_URL`.
+      3. Added interactive in-app `DiagnosticBanner`: Renders when an HTML response or API disconnection is detected, allowing users to configure the backend Cloud Run URL at runtime, test connection with a health check, or switch to offline Demo Mode.
+      4. Configured development proxy in `frontend/vite.config.ts`: Forwards `/api` to `http://localhost:8080` during local development so Vite's SPA fallback is never hit for API routes.
+      5. Added backend 404 JSON catch-all in `backend/src/app.ts`: Unhandled endpoints return structured JSON with status 404 rather than Express's default HTML page.
 
 

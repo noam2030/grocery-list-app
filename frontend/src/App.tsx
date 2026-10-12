@@ -8,6 +8,7 @@ import { GroceryItemCard } from './components/GroceryItemCard';
 import { BatchActionsBar } from './components/BatchActionsBar';
 import { EmptyState } from './components/EmptyState';
 import { CategoryBadge } from './components/CategoryBadge';
+import { DiagnosticBanner } from './components/DiagnosticBanner';
 import { AlertCircle, X, Loader2 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -22,6 +23,7 @@ export const App: React.FC = () => {
 
   const [isListModalOpen, setIsListModalOpen] = useState(false);
   const [listModalInitialCreate, setListModalInitialCreate] = useState(false);
+  const [isBannerDismissed, setIsBannerDismissed] = useState(false);
 
   const {
     lists,
@@ -35,6 +37,10 @@ export const App: React.FC = () => {
     loading,
     error,
     setError,
+    isHtmlError,
+    setIsHtmlError,
+    isDemoMode,
+    setIsDemoMode,
     statusFilter,
     setStatusFilter,
     categoryFilter,
@@ -51,7 +57,8 @@ export const App: React.FC = () => {
     deleteItem,
     clearCompleted,
     createList,
-    deleteList
+    deleteList,
+    refresh
   } = useGroceryList();
 
   useEffect(() => {
@@ -72,6 +79,8 @@ export const App: React.FC = () => {
     setSearchQuery('');
   };
 
+  const showDiagnostic = (isHtmlError || isDemoMode) && !isBannerDismissed;
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
       {/* Header */}
@@ -91,8 +100,30 @@ export const App: React.FC = () => {
 
       {/* Main Container */}
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-5 space-y-5">
-        {/* Error Toast */}
-        {error && (
+        {/* Diagnostic Banner for HTML doctype errors or offline demo mode */}
+        {showDiagnostic && (
+          <DiagnosticBanner
+            isHtmlError={isHtmlError}
+            errorMessage={error}
+            isDemoMode={isDemoMode}
+            onToggleDemoMode={() => {
+              if (isDemoMode) {
+                setIsDemoMode(false);
+                refresh();
+              } else {
+                setIsDemoMode(true);
+              }
+            }}
+            onRetry={() => {
+              setIsBannerDismissed(false);
+              refresh();
+            }}
+            onDismiss={() => setIsBannerDismissed(true)}
+          />
+        )}
+
+        {/* Standard Error Toast (only shown if not already displayed in DiagnosticBanner) */}
+        {error && !isHtmlError && (
           <div className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 text-xs shadow-sm">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />

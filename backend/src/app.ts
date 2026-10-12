@@ -17,6 +17,16 @@ export function createApp() {
   app.use('/api/lists', listsRoutes);
   app.use('/api/items', itemsRoutes);
 
+  // 404 JSON Catch-All Handler (prevents default Express HTML error pages)
+  app.use((req, res) => {
+    res.status(404).json({
+      error: {
+        code: 'NOT_FOUND',
+        message: `Endpoint ${req.method} ${req.path} not found`
+      }
+    });
+  });
+
   // Error handling middleware
   app.use(errorHandler);
 

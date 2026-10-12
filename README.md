@@ -66,6 +66,7 @@ grocery-list-app/
 │   │   │   ├── AddItemForm.tsx       # Smart item creation form
 │   │   │   ├── BatchActionsBar.tsx   # Progress bar & clear completed
 │   │   │   ├── CategoryBadge.tsx     # Color-coded aisle badges
+│   │   │   ├── DiagnosticBanner.tsx  # API connection & HTML error diagnostic banner
 │   │   │   ├── EmptyState.tsx        # Contextual empty state illustrations
 │   │   │   ├── FilterBar.tsx         # Search, status tabs & category pills
 │   │   │   ├── GroceryItemCard.tsx   # Item card with quantity stepper
@@ -227,5 +228,13 @@ vercel deploy --prod --scope noam-projects2 --token $VERCEL_TOKEN --yes
 5. **Missing Vercel Org/Project ID Secrets**: Eliminated `vercel pull` and replaced with direct non-interactive `vercel deploy --prod --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }} --yes`.
 6. **Cloud Run Buildpack Compilation**: Placed `typescript` in `dependencies` in `backend/package.json`, added `"gcp-build": "tsc"`, and provided a multi-stage `Dockerfile` and `.gcloudignore` for resilient source builds.
 7. **Vercel Build ImportMeta TS2339**: Created `frontend/src/vite-env.d.ts` and configured `frontend/tsconfig.json` with `types: ["vite/client"]` and hardened environment resolution in `frontend/src/api/client.ts`.
+8. **Frontend HTML Doctype Parsing Defense (`Unexpected token '<', "<!doctype "... is not valid JSON`)**:
+   - *Problem*: In deployed SPAs (e.g., Vercel) or local development where `VITE_API_URL` is empty or unconfigured, fetch calls requesting relative endpoints (`/api/...`) match Vercel's catch-all SPA rewrite rule (`/(.*) -> /index.html`). Vercel returns `index.html` (which starts with `<!doctype html>`) with HTTP status 200. Calling `response.json()` causes an uncaught syntax exception.
+   - *Resolution*:
+     - Hardened `frontend/src/api/client.ts` to inspect `Content-Type` and body text before parsing JSON, detecting `<!doctype` and `text/html` responses and raising descriptive errors instead of crashing.
+     - Added `DiagnosticBanner.tsx` allowing users to configure the backend API URL dynamically at runtime (persisted in `localStorage.setItem('freshcart_api_url', ...)`), run health checks, or switch seamlessly into offline Demo Mode.
+     - Configured `/api` proxy in `frontend/vite.config.ts` to forward calls to `http://localhost:8080` during local development.
+     - Added 404 JSON catch-all in `backend/src/app.ts` ensuring unmatched backend endpoints always return JSON rather than Express default HTML pages.
+
 
 

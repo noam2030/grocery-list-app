@@ -53,4 +53,7 @@ jobs:
             --port 8080 \
             --quiet \
             --set-env-vars "GCP_PROJECT_ID=ai-learning-499409,FIRESTORE_COLLECTION=grocery-list-app,NODE_ENV=production,CORS_ORIGIN=*"
+          echo "Service deployed successfully."
+          gcloud run services describe grocery-list-app-api --project ai-learning-499409 --region us-central1 --format='value(status.url)'
+
 

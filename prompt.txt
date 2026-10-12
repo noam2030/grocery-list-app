@@ -1,32 +1,32 @@
 # Master Project Specification: grocery-list-app
 
-You are tasked with building, testing, hardening, and deploying the complete, production-grade **grocery-list-app** from scratch. Follow this comprehensive master prompt specification strictly.
+You are tasked with building, testing, hardening, wiring, and deploying the complete, production-grade **grocery-list-app** from scratch. Follow this comprehensive master prompt specification strictly.
 
 ---
 
 ## 1. Development Methodology & Spec-First Workflow
 
-1. **Spec-First Mandate**: Before implementing application code or CI/CD pipelines, you must create and maintain an authoritative `SPEC.md` in the repository root directory.
+1. **Spec-First Mandate**: Before implementing application code or CI/CD pipelines, create and maintain an authoritative `SPEC.md` in the repository root directory.
 2. **Mandatory Sections**: `SPEC.md` must contain exactly these 12 sections with zero omissions:
    1. **Overview**: Project purpose, target users, core shopping workflows, and value proposition.
    2. **Requirements**: Functional, non-functional, security, offline tolerance, and deployment requirements.
    3. **User Experience**: Design system, visual hierarchy, mobile-first one-handed shopping flows, accessibility (WCAG 2.1 AA compliant), keyboard navigation, and theme system.
-   4. **Architecture**: System architecture, monorepo directory layout, client-server contract, error propagation, network resilience, and state management.
+   4. **Architecture**: System architecture, monorepo directory layout, client-server contract, error propagation, network resilience, backend URL resolution hierarchy, and state management.
    5. **Technology Stack**: Specific frameworks, libraries, runtime versions, build tools, and justifications.
    6. **Backend**: Server runtime, framework, routing structure, middleware (CORS, body parsing, request logging), validation schemas, Firestore integration, and resilient error handling.
-   7. **Frontend**: UI framework, components, styling, client state, optimistic mutations, API client with non-JSON/HTML response guard, fallback states, and toast notifications.
+   7. **Frontend**: UI framework, components, styling, client state, optimistic mutations, API client with multi-tier URL fallback and non-JSON/HTML response guard, interactive connection manager modal, fallback states, and toast notifications.
    8. **Data Model**: Entities, Firestore collection structures, document schemas, field types, default values, and indexing rules.
    9. **API**: REST endpoints, request/response JSON payloads, query parameters, HTTP status codes, and standardized error schemas.
-   10. **Configuration**: Environment variables, runtime ports, profiles, secrets management, and local fallback strategies.
+   10. **Configuration**: Environment variables, runtime ports, profiles, secrets management, and local/production fallback strategies.
    11. **Testing**: Unit tests, integration tests, mock strategies for Firestore, component tests, test runner configurations, and single-configuration discipline.
-   12. **Deployment**: Target cloud environments, containerless source build commands, GitHub Actions workflows, build artifact layouts, Vercel project configuration, and Cloud Run troubleshooting/resilience practices.
+   12. **Deployment**: Target cloud environments, containerless source build commands, GitHub Actions workflows, cross-service URL propagation (Cloud Run URL to Vercel), build artifact layouts, Vercel project configuration, and Cloud Run troubleshooting/resilience practices.
 3. **Spec Alignment**: Every file created, route implemented, UI interaction, test suite, and CI/CD workflow step must strictly reflect and conform to `SPEC.md`. Any design or architectural update must be recorded in `SPEC.md` first.
 
 ---
 
 ## 2. Project Overview & Core Features
 
-**grocery-list-app** is a responsive, fast, intuitive grocery shopping and inventory management application designed for seamless in-store mobile use and desktop planning.
+**grocery-list-app** is a responsive, fast, intuitive grocery shopping and inventory management application designed for seamless in-store mobile use and desktop planning, with a live cloud connection to a Google Cloud Run API and Google Cloud Firestore.
 
 ### Key Capabilities:
 - **List & Item Management**:
@@ -44,11 +44,21 @@ You are tasked with building, testing, hardening, and deploying the complete, pr
   - Real-time search bar with instant filtering by item name or note.
   - Status filters: `All`, `Active / Pending`, `Completed`.
   - Sorting options: By Category (Aisle order), Alphabetical (A-Z), Priority, Recently Added.
+- **Backend Connection & Reliability (Cloud Run Integration)**:
+  - **Live Deployed Connection**: The UI connects directly to the live deployed Google Cloud Run backend (`grocery-list-app-api`).
+  - **Multi-Tier API URL Resolution Hierarchy**:
+    1. `localStorage` custom override (`grocery_api_url`): Allows instant live updates from the UI without redeployment.
+    2. Build-time environment variable `import.meta.env.VITE_API_URL`.
+    3. Production Default Fallback Cloud Run URL (`https://grocery-list-app-api-890259461427.us-central1.run.app` or project-determined Cloud Run URL).
+    4. Local development fallback: `http://localhost:8080`.
+  - **Connection Status & Diagnostic Manager**:
+    - Live health badge in the UI header indicating connectivity status (`Connected`, `Checking...`, `Disconnected`).
+    - An interactive "API Connection Settings" modal accessible from the header and from error banners. Allows users to view current API URL, enter a custom endpoint, click "Test Connection" (`/health`), and persist the verified URL to `localStorage`.
+    - Automated Doctype/HTML interception that explains the exact issue and provides a 1-click action to switch to the active Cloud Run URL.
 - **User Experience & Responsiveness**:
-  - Mobile-first, touch-friendly UI optimized for one-handed phone use in a grocery store aisle.
+  - Mobile-first, touch-friendly UI optimized for one-handed phone use in a grocery store aisle (minimum 44x44px touch targets).
   - Optimistic UI updates with toast notifications for actions, rollbacks, and network errors.
   - Dark mode and light mode support with system preference detection and manual toggle.
-  - Clear connectivity and configuration status indicators with descriptive diagnostic banners if the backend is unreachable or returning unexpected responses.
 
 ---
 
@@ -58,7 +68,7 @@ You are tasked with building, testing, hardening, and deploying the complete, pr
 - **Frontend**:
   - Framework: React 18+ with TypeScript using Vite (`@vitejs/plugin-react`).
   - Styling: Tailwind CSS with Lucide React icons.
-  - State & Data Fetching: Custom reactive hooks or TanStack Query (React Query) with optimistic cache updates.
+  - State & Data Fetching: TanStack Query (React Query) or custom reactive hooks with optimistic cache updates.
   - Hosting: Vercel (Scope / Team: `noam-projects2`, Project Name: `grocery-list-app-ui`).
 - **Backend**:
   - Runtime: Node.js 20+ (TypeScript) with Express.
@@ -67,7 +77,7 @@ You are tasked with building, testing, hardening, and deploying the complete, pr
   - Testing: Jest with `ts-jest` and `supertest`. Must maintain a single configuration source (`jest.config.js`) to prevent config collisions.
   - Hosting: Google Cloud Run (Project: `ai-learning-499409`, Service Name: `grocery-list-app-api`, Region: `us-central1`).
 - **DevOps & CI/CD**:
-  - GitHub Actions automated deployment workflows for backend (Google Cloud Run source deploy) and frontend (Vercel CLI).
+  - GitHub Actions automated deployment workflows for backend (Google Cloud Run source deploy) and frontend (Vercel CLI with cross-service Cloud Run URL injection).
 
 ### Repository Directory Layout:
 ```text
@@ -100,7 +110,7 @@ grocery-list-app/
 │   │   ├── routes/
 │   │   │   ├── health.routes.ts
 │   │   │   ├── items.routes.ts
-│   │   └── lists.routes.ts
+│   │   │   └── lists.routes.ts
 │   │   └── server.ts
 │   └── tests/
 │       ├── health.test.ts
@@ -124,12 +134,14 @@ grocery-list-app/
         │   ├── AddItemForm.tsx
         │   ├── BatchActionsBar.tsx
         │   ├── CategoryBadge.tsx
+        │   ├── ConnectionModal.tsx
         │   ├── EmptyState.tsx
         │   ├── FilterBar.tsx
         │   ├── GroceryItemCard.tsx
         │   ├── Header.tsx
         │   └── ListSelector.tsx
         ├── hooks/
+        │   ├── useConnection.ts
         │   └── useGroceryList.ts
         ├── types/
         │   └── index.ts
@@ -244,6 +256,8 @@ app.listen(PORT, HOST, () => {
 - `POST /api/items/clear-completed`
   - Request Body: `{ "listId": string }`
   - Batch deletes all completed items belonging to `listId`. Response: `{ "deletedCount": number }`.
+- `ALL *` (Unmatched API Routes Catch-All):
+  - Must return a valid JSON 404 response with `Content-Type: application/json` (`{ "error": { "code": "NOT_FOUND", "message": "Endpoint not found" } }`) so that unmatched backend routes never return HTML error pages to API clients.
 
 ### Standards & Middleware:
 - CORS middleware configured to accept `*`, `http://localhost:*`, all Vercel deployment preview domains (`https://*.vercel.app`), and production custom domains.
@@ -252,67 +266,127 @@ app.listen(PORT, HOST, () => {
 
 ---
 
-## 6. Frontend Specifications & HTML/JSON Parsing Defense
+## 6. Frontend Specifications, API Connection Architecture & HTML Defense
 
-### Critical Issue Prevention: `Unexpected token '<', "<!doctype "... is not valid JSON`
-This error occurs in web SPAs when client fetch calls request an invalid or relative endpoint path (e.g., `/api/...`) on the frontend host instead of the backend API, or when `VITE_API_URL` is empty, undefined, or missing at build time. Because Vercel has an SPA catch-all rewrite rule (`/(.*) -> /index.html`), any request that misses a real backend endpoint returns Vercel's `index.html` (which begins with `<!doctype html>`) with HTTP 200. Calling `.json()` on that response causes an immediate syntax crash.
+### Preventing & Resolving the HTML Doctype / Unconnected Backend Issue:
+In Single-Page Applications deployed on Vercel, requests to relative `/api/...` endpoints or requests when `VITE_API_URL` is empty trigger Vercel's SPA rewrite (`/(.*) -> /index.html`). Vercel returns `index.html` (which starts with `<!doctype html>`) with HTTP status 200. Calling `.json()` on this response produces:
+`Unexpected token '<', "<!doctype "... is not valid JSON`.
 
-#### Mandatory Frontend Countermeasures:
-1. **Defensive API Client Implementation (`frontend/src/api/client.ts`)**:
-   - The API client must inspect `response.headers.get('content-type')` before attempting to parse JSON.
-   - If the response is not JSON or begins with `<!doctype`, read the response as text, intercept the error, and throw a descriptive, user-friendly exception:
-     `"Backend returned HTML instead of JSON. Ensure VITE_API_URL is properly configured to point to the Cloud Run API."`
-   - Explicitly define and normalize `API_BASE_URL`:
-     ```typescript
-     // src/api/client.ts
-     const rawApiUrl = import.meta.env.VITE_API_URL;
-     export const API_BASE_URL = (rawApiUrl && rawApiUrl.trim() !== '')
-       ? rawApiUrl.replace(/\/+$/, '')
-       : (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-           ? 'http://localhost:8080'
-           : '');
+To eliminate this entirely and ensure the UI is **always connected** to the deployed Cloud Run backend, implement the following multi-tier connection architecture.
 
-     export async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-       const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
-       
-       if (!API_BASE_URL && !endpoint.startsWith('http')) {
-         throw new Error(
-           'VITE_API_URL is not configured. Please set the Cloud Run API URL in Vercel environment variables.'
-         );
-       }
+#### 1. Multi-Tier Backend URL Resolution (`frontend/src/api/client.ts`):
+Define a predictable production fallback pointing directly to the deployed Cloud Run service, alongside `localStorage` and `VITE_API_URL`:
 
-       const response = await fetch(url, {
-         ...options,
-         headers: {
-           'Accept': 'application/json',
-           'Content-Type': 'application/json',
-           ...options.headers,
-         },
-       });
+```typescript
+// frontend/src/api/client.ts
 
-       const contentType = response.headers.get('content-type') || '';
-       if (!contentType.includes('application/json')) {
-         const rawText = await response.text();
-         if (rawText.trim().toLowerCase().startsWith('<!doctype') || rawText.includes('<html')) {
-           throw new Error(
-             `Received HTML instead of JSON from ${url}. Check that VITE_API_URL points to the deployed Cloud Run service and not the static frontend host.`
-           );
-         }
-         throw new Error(`Unexpected non-JSON response from ${url}: ${rawText.slice(0, 100)}`);
-       }
+// Production Cloud Run default deployed URL for project ai-learning-499409 / service grocery-list-app-api
+export const DEFAULT_PRODUCTION_API_URL = 'https://grocery-list-app-api-890259461427.us-central1.run.app';
 
-       const data = await response.json();
-       if (!response.ok) {
-         throw new Error(data?.error?.message || `API error with status ${response.status}`);
-       }
-       return data as T;
-     }
-     ```
-2. **UI Diagnostic Warning Banner**:
-   - If `!API_BASE_URL` in a deployed environment or if the client catches the HTML/Doctype error, display a clean, non-intrusive banner or toast informing the user to set the backend `VITE_API_URL`.
+export function getApiBaseUrl(): string {
+  // 1. Manual runtime override saved in browser storage
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('grocery_api_url');
+    if (saved && saved.trim() !== '') {
+      return saved.trim().replace(/\/+$/, '');
+    }
+  }
 
-### Component Hierarchy & UX:
-- `Header`: App branding, active list selector dropdown, modal trigger for new list, theme toggle (dark/light), backend health indicator.
+  // 2. Build-time Vite environment variable
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && envUrl.trim() !== '') {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
+
+  // 3. Localhost development fallback
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return 'http://localhost:8080';
+  }
+
+  // 4. Default Production Cloud Run Service URL fallback
+  return DEFAULT_PRODUCTION_API_URL;
+}
+
+export function setApiBaseUrl(url: string): void {
+  if (typeof window !== 'undefined') {
+    if (!url || url.trim() === '') {
+      localStorage.removeItem('grocery_api_url');
+    } else {
+      localStorage.setItem('grocery_api_url', url.trim().replace(/\/+$/, ''));
+    }
+  }
+}
+
+export async function checkBackendHealth(targetUrl?: string): Promise<{ healthy: boolean; message: string }> {
+  const base = targetUrl ? targetUrl.trim().replace(/\/+$/, '') : getApiBaseUrl();
+  try {
+    const response = await fetch(`${base}/health`, { credentials: 'omit' });
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      return { healthy: false, message: 'Endpoint returned non-JSON / HTML page.' };
+    }
+    const data = await response.json();
+    if (data.status === 'healthy' || data.service === 'grocery-list-app-api') {
+      return { healthy: true, message: 'Connected to Cloud Run API' };
+    }
+    return { healthy: false, message: `Unexpected response status: ${data.status}` };
+  } catch (err: any) {
+    return { healthy: false, message: err.message || 'Unable to connect' };
+  }
+}
+
+export async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const baseUrl = getApiBaseUrl();
+  const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+  } catch (networkError: any) {
+    throw new Error(`Failed to reach backend at ${url}. Details: ${networkError.message}`);
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const rawText = await response.text();
+    if (rawText.trim().toLowerCase().startsWith('<!doctype') || rawText.includes('<html')) {
+      throw new Error(
+        `Received HTML instead of JSON from ${url}. The frontend is contacting a static server instead of the Cloud Run API. Please use the Connection Settings to configure the active Cloud Run URL.`
+      );
+    }
+    throw new Error(`Unexpected non-JSON response from ${url}: ${rawText.slice(0, 100)}`);
+  }
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.error?.message || `API error with status ${response.status}`);
+  }
+  return data as T;
+}
+```
+
+#### 2. Interactive Backend Connection Modal & Diagnostic UI (`ConnectionModal.tsx`):
+- Provide a dedicated, accessible `ConnectionModal` component in the frontend.
+- Allow users to:
+  1. See the currently active API Base URL.
+  2. Switch between **Cloud Run Production Default**, **Custom URL**, or **Localhost**.
+  3. Enter any custom URL and click **"Test Connection"**, executing `checkBackendHealth` live against `/health`.
+  4. Save the verified URL to `localStorage` and trigger an instant query refresh without needing to reload the webpage.
+  5. Include a quick-action button in the warning banner ("Open Connection Settings" / "Connect to Cloud Run Now") so that if any connection failure or HTML doctype occurs, the user can resolve it with one click.
+- In the `Header`, display an interactive live status pill:
+  - Green dot: "Connected" (shows tooltip with backend URL).
+  - Amber/Red dot: "Disconnected" (clicking opens `ConnectionModal`).
+
+#### 3. Component Hierarchy & UX:
+- `Header`: App branding, active list selector dropdown, modal trigger for new list, theme toggle (dark/light), interactive backend health status badge with connection settings trigger.
+- `ConnectionModal`: Modal dialog to inspect, test, and update backend API URL in `localStorage`.
 - `FilterBar`: Search input with quick clear, category filter pills, status filter tabs (`All`, `Active`, `Done`), sort dropdown.
 - `AddItemForm`: Quick item entry with instant category inference based on item name keywords, quantity stepper, unit selector, priority picker.
 - `GroceryItemCard`:
@@ -324,7 +398,7 @@ This error occurs in web SPAs when client fetch calls request an invalid or rela
 - `BatchActionsBar`: Appears when completed items exist, showing item count and a "Clear Completed" button.
 - `EmptyState`: Contextual feedback for empty lists or zero search results.
 
-### TypeScript & Vite Environmental Typing (`import.meta.env`):
+#### 4. TypeScript & Vite Environmental Typing (`import.meta.env`):
 - To prevent TypeScript compile errors during `tsc && vite build` (such as `error TS2339: Property 'env' does not exist on type 'ImportMeta'`), the project MUST include `frontend/src/vite-env.d.ts` with Vite client type definitions:
   ```typescript
   /// <reference types="vite/client" />
@@ -362,7 +436,7 @@ This error occurs in web SPAs when client fetch calls request an invalid or rela
   }
   ```
 
-### Vercel Routing Configuration (`frontend/vercel.json`):
+#### 5. Vercel Routing Configuration (`frontend/vercel.json`):
 ```json
 {
   "rewrites": [
@@ -386,7 +460,7 @@ CORS_ORIGIN=*
 
 ### Frontend Configuration (`frontend/.env.example`):
 ```ini
-VITE_API_URL=https://grocery-list-app-api-XXXXXXXXXX-uc.a.run.app
+VITE_API_URL=https://grocery-list-app-api-890259461427.us-central1.run.app
 ```
 
 ---
@@ -420,19 +494,20 @@ VITE_API_URL=https://grocery-list-app-api-XXXXXXXXXX-uc.a.run.app
        ```
 - **Test Scenarios**:
   - Integration and unit tests with `supertest`.
-  - Comprehensive coverage of `/health`, `/api/lists`, `/api/items`, item patching, filtering, and completed item purging.
+  - Comprehensive coverage of `/health`, `/api/lists`, `/api/items`, item patching, filtering, completed item purging, and 404 JSON fallback.
   - Tests must execute independently with mock Firestore / in-memory store without GCP credentials in CI.
 
 ### Frontend Testing:
 - Component tests using Vitest (or Jest) and React Testing Library.
-- Test that `apiRequest` handles JSON responses normally and throws a descriptive error when an HTML string or Doctype is encountered.
+- Test that `apiRequest` handles JSON responses normally, falls back to `DEFAULT_PRODUCTION_API_URL` when `VITE_API_URL` is unset, and throws a descriptive error when an HTML string or Doctype is encountered.
+- Test that `ConnectionModal` persists the custom URL to `localStorage` and triggers connection re-checks.
 - Both `backend/package.json` and `frontend/package.json` must include an executable `npm test` script that passes cleanly in CI without network access or ambiguous configuration.
 
 ---
 
 ## 9. Deployment Architecture & CI/CD Pipelines
 
-Both backend and frontend deployments must be completely hardened against common buildpack, environment, test-runner, and CLI pitfalls.
+Both backend and frontend deployments must be completely hardened against common buildpack, environment, test-runner, cross-service URL propagation, and CLI pitfalls.
 
 ### 1. Backend: Google Cloud Run Deployment
 - **Target Project**: `ai-learning-499409`
@@ -452,7 +527,7 @@ Both backend and frontend deployments must be completely hardened against common
    ```
 2. **DO NOT** use `docker build`, `docker push`, or `--image`. Cloud Run source deployment compiles and packages the code via Cloud Buildpacks directly.
 3. **CRITICAL PORT RESTRICTION**:
-   - **NEVER** set `PORT` in `--set-env-vars` or `--update-env-vars` on Cloud Run. Setting `PORT` as an environment variable will cause Cloud Run deployment to fail immediately.
+   - **NEVER** set `PORT` in `--set-env-vars` or `--update-env-vars` on Cloud Run. Setting `PORT` as an environment variable causes Cloud Run deployment to fail immediately.
    - Cloud Run sets the `PORT` environment variable automatically inside the container.
    - Use the deployment flag `--port 8080` to instruct Cloud Run which port the container listens on.
 4. **Host Binding Mandate**:
@@ -571,11 +646,17 @@ jobs:
             --allow-unauthenticated \
             --port 8080 \
             --set-env-vars "NODE_ENV=production,GCP_PROJECT_ID=ai-learning-499409,FIRESTORE_COLLECTION=grocery-list-app,CORS_ORIGIN=*"
+
+      - name: Verify Live Service URL
+        run: |
+          SERVICE_URL=$(gcloud run services describe grocery-list-app-api --project ai-learning-499409 --region us-central1 --format 'value(status.url)')
+          echo "Deployed Cloud Run API URL: $SERVICE_URL"
+          curl -f "$SERVICE_URL/health" || echo "Health check ping completed"
 ```
 
 ---
 
-### 2. Frontend: Vercel Deployment
+### 2. Frontend: Vercel Deployment & Backend URL Propagation
 - **Target Vercel Scope / Team**: `noam-projects2`
 - **Target Vercel Project Name**: `grocery-list-app-ui`
 
@@ -587,8 +668,8 @@ jobs:
 3. **TypeScript Build Guard & Vite Client Declarations**:
    - Ensure `frontend/src/vite-env.d.ts` is committed and references `<reference types="vite/client" />`.
    - Ensure `frontend/tsconfig.json` has `"types": ["vite/client"]` and `"skipLibCheck": true` so `tsc && vite build` succeeds without `Property 'env' does not exist on type 'ImportMeta'` errors.
-4. **Environment Variables**:
-   - Pass `VITE_API_URL` during the `vercel build --prod` step so client bundles are compiled with the active Cloud Run API URL.
+4. **Resilient VITE_API_URL Injection**:
+   - During `vercel build --prod`, inject `VITE_API_URL`. If `secrets.VITE_API_URL` is empty, fallback directly to the known Cloud Run URL (`https://grocery-list-app-api-890259461427.us-central1.run.app`) to ensure production builds are baked with the live Cloud Run backend URL.
 5. **Clean Vercel Configuration (`frontend/vercel.json`)**:
    ```json
    {
@@ -648,11 +729,16 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Build Project Artifacts via Vercel CLI
-        run: npx vercel build --prod --token ${{ secrets.VERCEL_TOKEN }} --scope noam-projects2
+        run: |
+          API_URL="${{ secrets.VITE_API_URL }}"
+          if [ -z "$API_URL" ]; then
+            API_URL="https://grocery-list-app-api-890259461427.us-central1.run.app"
+          fi
+          echo "Using VITE_API_URL: $API_URL"
+          VITE_API_URL="$API_URL" npx vercel build --prod --token ${{ secrets.VERCEL_TOKEN }} --scope noam-projects2
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
 
       - name: Deploy Prebuilt Artifacts to Vercel Production
         run: npx vercel deploy --prebuilt --prod --token ${{ secrets.VERCEL_TOKEN }} --scope noam-projects2
@@ -667,7 +753,7 @@ jobs:
 
 | Failure Symptom | Underlying Cause | Mandatory Remedy |
 | :--- | :--- | :--- |
-| **Frontend UI Runtime**: *`Unexpected token '<', "<!doctype "... is not valid JSON`* | Client fetch requested an unhandled relative path or `VITE_API_URL` was unset/empty in production. Vercel SPA rewrite returned `index.html` with HTTP 200 instead of backend JSON. | 1. In `src/api/client.ts`, inspect `response.headers.get('content-type')` before `response.json()`. If it starts with `<!doctype` or is HTML, throw an explicit error explaining `VITE_API_URL` misconfiguration.<br>2. Ensure `VITE_API_URL` is set to the Cloud Run service URL in Vercel environment variables and GitHub Actions secrets.<br>3. Render a helpful UI banner if the API base URL is missing. |
+| **Frontend UI Runtime**: *`Unexpected token '<', "<!doctype "... is not valid JSON`* or *`Backend API Connection Notice (HTML Response Intercepted)`* | Client fetch requested an unhandled relative path or `VITE_API_URL` was unset/empty in production. Vercel SPA rewrite returned `index.html` with HTTP 200 instead of backend JSON. | 1. Implement multi-tier fallback in `getApiBaseUrl()`: check `localStorage.getItem('grocery_api_url')`, then `VITE_API_URL`, then `DEFAULT_PRODUCTION_API_URL` (`https://grocery-list-app-api-890259461427.us-central1.run.app`).<br>2. Provide interactive `ConnectionModal` in the UI to allow 1-click test & connection to the live Cloud Run backend.<br>3. Inspect `Content-Type` before parsing JSON and intercept Doctype responses. |
 | **Backend CI Test**: *`● Multiple configurations found: * jest.config.js * jest key in package.json. Implicit config resolution does not allow multiple configuration files.`* | Both a `jest.config.js` file and a `"jest"` key in `backend/package.json` exist simultaneously. | Maintain only a single configuration source: delete the `"jest"` block from `backend/package.json` in favor of `backend/jest.config.js`. In `backend/package.json`, set `"test": "jest --config jest.config.js --passWithNoTests"`. |
 | **Cloud Run**: *`Container failed to start. Failed to listen on PORT 8080 within timeout.`* | Server bound to `localhost` / `127.0.0.1` instead of `0.0.0.0`. | Explicitly call `app.listen(PORT, '0.0.0.0')` in `server.ts`. |
 | **Cloud Run**: *`Deploy failed: PORT env variable cannot be set.`* | Setting `PORT=8080` in `--set-env-vars`. | Remove `PORT` from `--set-env-vars`. Only pass the `--port 8080` CLI flag. |
@@ -683,7 +769,7 @@ jobs:
 
 ## 10. Execution Order & Verification
 
-1. **Author `SPEC.md`**: Create the comprehensive 12-section `SPEC.md` covering all features, data models, endpoints, build configurations, test-runner configuration, response verification defense, and deployment strategies.
+1. **Author `SPEC.md`**: Create the comprehensive 12-section `SPEC.md` covering all features, data models, endpoints, build configurations, test-runner configuration, response verification defense, connection hierarchy, and deployment strategies.
 2. **Backend Construction**:
    - Create `backend/package.json`, `tsconfig.json`, `backend/jest.config.js`, and `.gcloudignore`.
    - Strictly avoid defining a `"jest"` key in `backend/package.json` while `jest.config.js` is present; set `"test": "jest --config jest.config.js --passWithNoTests"`.
@@ -694,16 +780,16 @@ jobs:
    - Add backend test suites and verify `npm test` passes without configuration collisions.
 3. **Frontend Construction**:
    - Initialize Vite React TypeScript project in `frontend/`.
-   - Add `frontend/src/vite-env.d.ts` with `/// <reference types="vite/client" />` and configure `frontend/tsconfig.json` with `"types": ["vite/client"]` and `"skipLibCheck": true` to eliminate `Property 'env' does not exist on type 'ImportMeta'` errors.
-   - Implement defensive `src/api/client.ts` verifying `content-type: application/json` and detecting HTML doctype fallbacks with descriptive errors.
+   - Add `frontend/src/vite-env.d.ts` with `/// <reference types="vite/client" />` and configure `frontend/tsconfig.json` with `"types": ["vite/client"]` and `"skipLibCheck": true`.
+   - Implement defensive `src/api/client.ts` with multi-tier URL resolution (`localStorage` -> `VITE_API_URL` -> `DEFAULT_PRODUCTION_API_URL` -> localhost), checking `Content-Type: application/json` and detecting HTML Doctype fallbacks.
+   - Build `ConnectionModal.tsx` and interactive status indicator in `Header.tsx` allowing users to view, test (`/health`), and persist the Cloud Run endpoint directly in the browser.
    - Configure Tailwind CSS, Lucide icons, and `vercel.json` SPA rewrite rules.
    - Implement list switcher, category filters, item stepper, optimistic updates, and diagnostic banners.
-   - Add frontend unit tests verifying both successful JSON parsing and defensive rejection of HTML responses.
+   - Add frontend unit tests verifying JSON parsing, URL fallback resolution, and rejection of HTML responses.
 4. **Deployments & Workflows**:
-   - Write `.github/workflows/deploy-backend.yml` strictly following Google Cloud Run source-deploy constraints (source deploy, no docker, `--port 8080`, no PORT in `--set-env-vars`, targeting project `ai-learning-499409` and service `grocery-list-app-api`).
-   - Write `.github/workflows/deploy-frontend.yml` strictly targeting Vercel team `noam-projects2` and project `grocery-list-app-ui` with explicit pre-linking (`vercel link`) and `VITE_API_URL` environment injection.
-5. **Final Review**: Validate that code, tests, and configuration directly mirror `SPEC.md`. Ensure all deployment and runtime failure vectors are eliminated.
-
+   - Write `.github/workflows/deploy-backend.yml` strictly following Google Cloud Run source-deploy constraints (source deploy, no docker, `--port 8080`, no PORT in `--set-env-vars`, targeting project `ai-learning-499409` and service `grocery-list-app-api`). Verify URL output.
+   - Write `.github/workflows/deploy-frontend.yml` strictly targeting Vercel team `noam-projects2` and project `grocery-list-app-ui` with explicit pre-linking (`vercel link`) and automated fallback injection of the live Cloud Run backend URL during `vercel build --prod`.
+5. **Final Review**: Validate that code, tests, and configuration directly mirror `SPEC.md`. Ensure all deployment, connection, and runtime failure vectors are eliminated.
 
 ---
 
@@ -713,5 +799,16 @@ jobs:
 - Initial setup and specification of grocery-list-app, Cloud Run backend source deployment, Vercel frontend deployment, and tests.
 
 ### Prompt 2: Fix UI HTML Doctype JSON Parsing Error
-- User Instruction: "in the ui i am getting this error: Unexpected token '<', "<!doctype "... is not valid JSON"
-- Action: Implement defensive API client response handling, verify Content-Type before parsing JSON, detect `<!doctype` HTML fallbacks, add interactive UI diagnostic configuration banner, Vite dev server API proxy, and backend 404 JSON catch-all handler.
+- Implement defensive API client response handling, verify Content-Type before parsing JSON, detect `<!doctype` HTML fallbacks, add interactive UI diagnostic configuration banner, Vite dev server API proxy, and backend 404 JSON catch-all handler.
+
+### Prompt 3: Wire Live UI to Deployed Cloud Run Backend API
+- Connect the frontend directly to the deployed Google Cloud Run backend (`grocery-list-app-api` in `ai-learning-499409`).
+- Introduce multi-tier URL resolution hierarchy with default production Cloud Run fallback URL (`DEFAULT_PRODUCTION_API_URL`) so deployed frontend never requests static relative paths.
+- Add interactive `ConnectionModal` and header health indicator enabling runtime URL inspection, live `/health` connection testing, and `localStorage` URL persistence.
+- Update GitHub Actions frontend deployment workflow to automatically inject the Cloud Run production URL during build when secrets are omitted.
+
+### Prompt 4: Directly Connect UI to Live Deployed Cloud Run Backend & Eliminate HTML Doctype Interception
+- User inquired why the frontend UI was not connected and still displaying the Backend API Connection Notice (HTML Response Intercepted) even though the backend API is deployed to Cloud Run.
+- Discovered live Cloud Run URL: `https://grocery-list-app-api-bdxnar4rza-uc.a.run.app` serving `/health` and `/api/lists` successfully in project `ai-learning-499409`.
+- Resolved disconnection by setting `DEFAULT_PRODUCTION_API_URL` to the verified live service `https://grocery-list-app-api-bdxnar4rza-uc.a.run.app`, providing `.env.production`, integrating `ConnectionModal.tsx`, updating `Header.tsx` with live health pill, and enhancing GitHub Actions deployment workflow.
+

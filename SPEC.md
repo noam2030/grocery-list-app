@@ -254,21 +254,27 @@ The `firestore.ts` module checks for Google Cloud environment or Application Def
    - Branding with grocery icon.
    - List selector pill button with total/pending badges.
    - Quick "New List" trigger.
+   - Live Backend Connection status pill (Green "Cloud Run API" badge when connected, Amber/Red when disconnected/HTML intercepted) with 1-click trigger to open `ConnectionModal`.
    - Dark/Light mode toggle button.
-2. **`FilterBar`**:
+2. **`ConnectionModal`**:
+   - Dedicated interactive backend connection modal allowing users to inspect, test, and switch API URLs at runtime.
+   - Quick 1-click preset button for the live deployed Cloud Run API (`https://grocery-list-app-api-bdxnar4rza-uc.a.run.app`).
+   - Live `/health` ping test verifying endpoint response, latency, and status.
+   - Saves custom or reset URLs directly to `localStorage` (`grocery_api_url` and `freshcart_api_url`) and triggers instant data reload.
+3. **`FilterBar`**:
    - Live search input with single-click clear button.
    - Status tabs: `All`, `Active`, `Completed`.
    - Category filter pills with counts.
    - View mode toggle: `Grouped by Aisle` vs `List View`.
    - Sort dropdown: Category, A-Z, Priority, Newest.
-3. **`AddItemForm`**:
+4. **`AddItemForm`**:
    - Item name input with instant category auto-detection.
    - Quantity input with quick `+` / `-` increment buttons.
    - Unit selection dropdown (`pcs`, `kg`, `lbs`, `oz`, `pack`, `box`, `bottle`, `bunch`, `can`).
    - Category picker with color dots.
    - Priority selector (`low`, `medium`, `high`).
    - Add button with keyboard shortcut (`Enter`).
-4. **`GroceryItemCard`**:
+5. **`GroceryItemCard`**:
    - Large touch checkbox.
    - Strike-through formatting when completed.
    - Quantity and unit badge.
@@ -276,16 +282,17 @@ The `firestore.ts` module checks for Google Cloud environment or Application Def
    - Priority indicator.
    - Quick `+` and `-` quantity steppers directly on card.
    - Delete button with confirmation toast.
-5. **`BatchActionsBar`**:
+6. **`BatchActionsBar`**:
    - Progress bar showing completed items vs total items.
    - "Clear Completed" button.
-6. **`EmptyState`**:
+7. **`EmptyState`**:
    - Graphic and instructions when list is empty or search yields no matches.
-7. **`ListSelectorModal`**:
+8. **`ListSelectorModal`**:
    - Modal for listing, creating, switching, and deleting shopping lists.
-8. **`DiagnosticBanner`**:
+9. **`DiagnosticBanner`**:
    - Visual status banner rendered when the backend returns HTML, when `VITE_API_URL` is unconfigured, or when connectivity issues arise.
-   - Provides an inline API configuration panel allowing users to set a custom backend URL (persisted in `localStorage` under `freshcart_api_url`) and test connectivity.
+   - Features 1-click "Connect to Cloud Run" button switching to `https://grocery-list-app-api-bdxnar4rza-uc.a.run.app`.
+   - Provides an inline API configuration drawer allowing users to set a custom backend URL and test connectivity.
    - Includes a "Demo Mode" toggle that seamlessly falls back to local in-memory storage so users can explore and use the full application offline without JSON parsing crashes.
 
 ### Single-Page Application (SPA) Resilience & Routing
@@ -298,21 +305,21 @@ The `firestore.ts` module checks for Google Cloud environment or Application Def
   }
   ```
 
-### HTML / Doctype Response Defense (`Unexpected token '<', "<!doctype "... is not valid JSON`)
-- **Vulnerability Context**:
-  When a single-page application requests relative paths (such as `/api/lists` or `/api/items`) on a static hosting platform like Vercel where SPA rewrites (`/(.*) -> /index.html`) are active, any unrouted endpoint returns the host's `index.html` file (beginning with `<!doctype html>`) with HTTP status `200 OK`. If the client executes `response.json()` unconditionally, the JavaScript engine throws:
-  `SyntaxError: Unexpected token '<', "<!doctype "... is not valid JSON`.
+### Direct Cloud Run Connection & HTML / Doctype Response Defense
+- **Production Cloud Run Backend URL**:
+  `https://grocery-list-app-api-bdxnar4rza-uc.a.run.app` (deployed in project `ai-learning-499409`, region `us-central1`).
 - **Defensive API Client Implementation (`frontend/src/api/client.ts`)**:
   1. **Content-Type Inspection**: Inspects `response.headers.get('content-type')` prior to parsing JSON.
   2. **Doctype & HTML Interception**: If the response is not `application/json` or if the response text begins with `<!doctype` or contains `<html`, the client prevents calling `response.json()` and raises a descriptive, actionable error:
-     `"Backend returned HTML instead of JSON (received '<!doctype ...>'). Ensure VITE_API_URL is properly configured to point to your Cloud Run service (e.g. https://grocery-list-app-api-...a.run.app) and not the static frontend host."`
-  3. **Dynamic Base URL Resolution**:
-     - Precedence 1: Explicit user-configured URL stored in `localStorage.getItem('freshcart_api_url')`.
+     `"Backend returned HTML instead of JSON (received '<!doctype ...>'). Ensure VITE_API_URL is properly configured to point to your Cloud Run service (e.g. https://grocery-list-app-api-bdxnar4rza-uc.a.run.app) and not the static frontend host."`
+  3. **Multi-Tier Base URL Resolution Hierarchy**:
+     - Precedence 1: Explicit user-configured URL stored in `localStorage.getItem('grocery_api_url')` or `localStorage.getItem('freshcart_api_url')`.
      - Precedence 2: Environment variable `import.meta.env.VITE_API_URL`.
      - Precedence 3: Local development fallback `http://localhost:8080` when `window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'`.
-     - Precedence 4: Relative fallback `''`.
-     - Both `API_BASE` and `API_BASE_URL` are consistently exported.
-  4. **Health Check Utility**: Exports `checkBackendHealth(url?: string)` to test endpoints (`/health` or `/api/health`) before switching configurations.
+     - Precedence 4: Authoritative production Cloud Run fallback: `DEFAULT_PRODUCTION_API_URL` (`https://grocery-list-app-api-bdxnar4rza-uc.a.run.app`).
+     - Never returns `''` in production to prevent static host SPA rewrites from returning `index.html`.
+     - Both `API_BASE`, `API_BASE_URL`, and `DEFAULT_PRODUCTION_API_URL` are consistently exported.
+  4. **Health Check Utility**: Exports `checkBackendHealth(url?: string)` and `api.checkHealth(url?: string)` to test endpoints (`/health`) before saving configurations.
   5. **Safe In-Memory Demo Fallback**: When HTML responses or connection errors are detected, `useGroceryList` activates Demo Mode with default seeded grocery lists and items, permitting full add, edit, toggle, quantity adjustment, and batch clear interactions without crashing.
 
 ### Development Server Proxy (`frontend/vite.config.ts`)
@@ -505,16 +512,17 @@ interface GroceryItem {
 
 *Note: `PORT` is never passed to `--set-env-vars` on Cloud Run because Cloud Run reserves and automatically injects it. Cloud Run is configured using `--port 8080`.*
 
-### Frontend Environment Variables (`frontend/.env`)
-| Variable | Description | Default |
-|---|---|---|
-| `VITE_API_URL` | Base URL of deployed Cloud Run backend API | `http://localhost:8080` |
+### Frontend Environment Variables (`frontend/.env`, `frontend/.env.production`)
+| Variable | Description | Production Default | Local Default |
+|---|---|---|---|
+| `VITE_API_URL` | Base URL of deployed Cloud Run backend API | `https://grocery-list-app-api-bdxnar4rza-uc.a.run.app` | `http://localhost:8080` |
 
 ### Runtime Frontend Configuration & Fallback Precedence
-1. **User Override**: If `freshcart_api_url` exists in `localStorage`, the UI directs all API requests to this target.
+1. **User Override**: If `grocery_api_url` or `freshcart_api_url` exists in `localStorage`, the UI directs all API requests to this target.
 2. **Build-Time Environment**: If `import.meta.env.VITE_API_URL` is set and non-empty, it is used.
 3. **Localhost Fallback**: If hostname is `localhost` or `127.0.0.1`, defaults to `http://localhost:8080`.
-4. **Offline Demo Fallback**: If backend connection yields HTML or network failure, the application activates in-memory Demo Mode with full local CRUD capabilities.
+4. **Authoritative Production Cloud Run Fallback**: Defaults to `DEFAULT_PRODUCTION_API_URL` (`https://grocery-list-app-api-bdxnar4rza-uc.a.run.app`). The frontend never makes relative API requests in production to prevent static host SPA rewrites returning HTML doctype documents.
+5. **Offline Demo Fallback**: If backend connection yields HTML or network failure, the application activates in-memory Demo Mode with full local CRUD capabilities.
 
 ---
 
@@ -641,5 +649,21 @@ interface GroceryItem {
       3. Added interactive in-app `DiagnosticBanner`: Renders when an HTML response or API disconnection is detected, allowing users to configure the backend Cloud Run URL at runtime, test connection with a health check, or switch to offline Demo Mode.
       4. Configured development proxy in `frontend/vite.config.ts`: Forwards `/api` to `http://localhost:8080` during local development so Vite's SPA fallback is never hit for API routes.
       5. Added backend 404 JSON catch-all in `backend/src/app.ts`: Unhandled endpoints return structured JSON with status 404 rather than Express's default HTML page.
+11. **Failure Cause 11: Production UI Disconnected from Cloud Run API (HTML Response Intercepted Loop)**
+    - *Problem*: Although the backend API was deployed to Google Cloud Run (`grocery-list-app-api` in `ai-learning-499409` at `https://grocery-list-app-api-bdxnar4rza-uc.a.run.app`), the deployed Vercel frontend still displayed `Backend API Connection Notice (HTML Response Intercepted)` and operated in Demo Mode.
+    - *Root Causes*:
+      1. `getApiBaseUrl()` returned `""` (empty string) in production when `VITE_API_URL` was not bundled in the build, causing client fetch calls to hit relative paths `/api/...` on the static Vercel host.
+      2. SPA rewrites in `frontend/vercel.json` redirected static `/api/...` calls to `/index.html`, returning HTML with status 200.
+      3. Absence of an authoritative default production Cloud Run fallback URL (`DEFAULT_PRODUCTION_API_URL`) in `client.ts`.
+      4. Missing `frontend/.env.production` containing the production Cloud Run URL, meaning Vercel builds did not embed `VITE_API_URL`.
+      5. Absence of an easily accessible `ConnectionModal` and live header status badge allowing users to verify, test, or switch backend targets interactively.
+    - *Resolution*:
+      1. Defined authoritative `DEFAULT_PRODUCTION_API_URL = 'https://grocery-list-app-api-bdxnar4rza-uc.a.run.app'`.
+      2. Updated `getApiBaseUrl()` to prioritize `localStorage`, then `VITE_API_URL`, then localhost (for local development), and default strictly to `DEFAULT_PRODUCTION_API_URL` for hosted production environments. It never returns `''` on production hosts.
+      3. Created `frontend/.env.production` and `frontend/.env` defining `VITE_API_URL=https://grocery-list-app-api-bdxnar4rza-uc.a.run.app`.
+      4. Implemented `ConnectionModal.tsx` and integrated interactive connection status pill in `Header.tsx` displaying real-time connection status (Connected / Intercepted / Custom) and ping latency.
+      5. Added direct 1-click "Connect to Cloud Run" action in `DiagnosticBanner.tsx` and `ConnectionModal.tsx`.
+      6. Enhanced `.github/workflows/deploy-frontend.yml` to automatically query the Cloud Run service URL and bake `VITE_API_URL` into the production build.
+
 
 

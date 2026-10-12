@@ -1,15 +1,20 @@
 import { GroceryItem, GroceryList } from '../types';
 
 /**
+ * Authoritative deployed Cloud Run service URL for project 'ai-learning-499409'
+ */
+export const DEFAULT_PRODUCTION_API_URL = 'https://grocery-list-app-api-bdxnar4rza-uc.a.run.app';
+
+/**
  * Resolves the active backend API base URL with graceful fallback precedence:
- * 1. User manual override stored in localStorage ('freshcart_api_url')
+ * 1. User manual override stored in localStorage ('grocery_api_url' or 'freshcart_api_url')
  * 2. Vite environment variable import.meta.env.VITE_API_URL
  * 3. Localhost development fallback (http://localhost:8080)
- * 4. Empty string (relative API path)
+ * 4. Authoritative production Cloud Run fallback (DEFAULT_PRODUCTION_API_URL)
  */
 export function getApiBaseUrl(): string {
   if (typeof window !== 'undefined') {
-    const userOverride = localStorage.getItem('freshcart_api_url');
+    const userOverride = localStorage.getItem('grocery_api_url') || localStorage.getItem('freshcart_api_url');
     if (userOverride && userOverride.trim()) {
       return userOverride.trim().replace(/\/+$/, '');
     }
@@ -27,15 +32,18 @@ export function getApiBaseUrl(): string {
     }
   }
 
-  return '';
+  return DEFAULT_PRODUCTION_API_URL;
 }
 
 export function setApiBaseUrl(url: string | null): void {
   if (typeof window === 'undefined') return;
   if (!url || !url.trim()) {
     localStorage.removeItem('freshcart_api_url');
+    localStorage.removeItem('grocery_api_url');
   } else {
-    localStorage.setItem('freshcart_api_url', url.trim().replace(/\/+$/, ''));
+    const cleaned = url.trim().replace(/\/+$/, '');
+    localStorage.setItem('freshcart_api_url', cleaned);
+    localStorage.setItem('grocery_api_url', cleaned);
   }
 }
 
@@ -115,27 +123,35 @@ function resolveUrl(path: string): string {
   return base ? `${base}${path}` : path;
 }
 
+export async function checkBackendHealth(targetUrl?: string): Promise<{ ok: boolean; status: number; message: string; latencyMs: number }> {
+  const startTime = Date.now();
+  const base = (targetUrl !== undefined ? targetUrl : getApiBaseUrl()).replace(/\/+$/, '');
+  const url = base ? `${base}/health` : '/health';
+  try {
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    const latencyMs = Date.now() - startTime;
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    const text = await res.text();
+    if (text.trim().toLowerCase().startsWith('<!doctype') || ct.includes('text/html')) {
+      return { ok: false, status: res.status, message: 'Server returned HTML instead of JSON (static host SPA rewrite).', latencyMs };
+    }
+    if (res.ok) {
+      return { ok: true, status: res.status, message: 'Connected successfully to Cloud Run API!', latencyMs };
+    }
+    return { ok: false, status: res.status, message: `Server returned HTTP ${res.status}: ${text.slice(0, 100)}`, latencyMs };
+  } catch (err: any) {
+    const latencyMs = Date.now() - startTime;
+    return { ok: false, status: 0, message: err.message || 'Network connection failed.', latencyMs };
+  }
+}
+
 export const api = {
   getApiBaseUrl,
   setApiBaseUrl,
+  checkBackendHealth,
 
-  async checkHealth(targetUrl?: string): Promise<{ ok: boolean; status: number; message: string }> {
-    const base = (targetUrl !== undefined ? targetUrl : getApiBaseUrl()).replace(/\/+$/, '');
-    const url = base ? `${base}/health` : '/health';
-    try {
-      const res = await fetch(url, { headers: { Accept: 'application/json' } });
-      const ct = (res.headers.get('content-type') || '').toLowerCase();
-      const text = await res.text();
-      if (text.trim().toLowerCase().startsWith('<!doctype') || ct.includes('text/html')) {
-        return { ok: false, status: res.status, message: 'Server returned HTML instead of JSON.' };
-      }
-      if (res.ok) {
-        return { ok: true, status: res.status, message: 'Connected successfully to backend API!' };
-      }
-      return { ok: false, status: res.status, message: `Server returned HTTP ${res.status}: ${text.slice(0, 100)}` };
-    } catch (err: any) {
-      return { ok: false, status: 0, message: err.message || 'Network connection failed.' };
-    }
+  async checkHealth(targetUrl?: string): Promise<{ ok: boolean; status: number; message: string; latencyMs: number }> {
+    return checkBackendHealth(targetUrl);
   },
 
   // Lists

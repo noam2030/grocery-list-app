@@ -171,6 +171,54 @@ class TestSpecAndWorkflowCompliance(unittest.TestCase):
         self.assertIn("NOT_FOUND", app_content, "backend app.ts must have 404 JSON catch-all handler")
         self.assertIn("res.status(404)", app_content, "backend app.ts must return HTTP 404 JSON status")
 
+    def test_cloud_run_backend_connection_architecture(self):
+        """Verifies direct frontend connection to deployed Cloud Run backend API."""
+        client_ts_path = os.path.join(self.root_dir, "frontend", "src", "api", "client.ts")
+        with open(client_ts_path, "r", encoding="utf-8") as f:
+            client_content = f.read()
+
+        # Must export DEFAULT_PRODUCTION_API_URL pointing to deployed Cloud Run service
+        self.assertIn("DEFAULT_PRODUCTION_API_URL", client_content)
+        self.assertIn("grocery-list-app-api", client_content)
+        self.assertIn("run.app", client_content)
+
+        # Must export checkBackendHealth
+        self.assertIn("checkBackendHealth", client_content)
+
+        # Must have fallback to DEFAULT_PRODUCTION_API_URL in getApiBaseUrl()
+        self.assertIn("return DEFAULT_PRODUCTION_API_URL", client_content)
+
+        # Environment files
+        env_prod_path = os.path.join(self.root_dir, "frontend", ".env.production")
+        self.assertTrue(os.path.exists(env_prod_path), "frontend/.env.production must exist")
+        with open(env_prod_path, "r", encoding="utf-8") as f:
+            env_prod_content = f.read()
+        self.assertIn("VITE_API_URL", env_prod_content)
+        self.assertIn("grocery-list-app-api", env_prod_content)
+
+        # Connection modal component
+        modal_path = os.path.join(self.root_dir, "frontend", "src", "components", "ConnectionModal.tsx")
+        self.assertTrue(os.path.exists(modal_path), "frontend/src/components/ConnectionModal.tsx must exist")
+        with open(modal_path, "r", encoding="utf-8") as f:
+            modal_content = f.read()
+        self.assertIn("ConnectionModal", modal_content)
+        self.assertIn("DEFAULT_PRODUCTION_API_URL", modal_content)
+        self.assertIn("checkBackendHealth", modal_content)
+
+        # Header component integration
+        header_path = os.path.join(self.root_dir, "frontend", "src", "components", "Header.tsx")
+        with open(header_path, "r", encoding="utf-8") as f:
+            header_content = f.read()
+        self.assertIn("onOpenConnectionModal", header_content)
+        self.assertIn("isBackendConnected", header_content)
+
+        # Diagnostic banner quick connect
+        banner_path = os.path.join(self.root_dir, "frontend", "src", "components", "DiagnosticBanner.tsx")
+        with open(banner_path, "r", encoding="utf-8") as f:
+            banner_content = f.read()
+        self.assertIn("Connect to Cloud Run", banner_content)
+
+
 
 
 

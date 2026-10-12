@@ -1,11 +1,14 @@
 import React from 'react';
-import { ShoppingCart, Moon, Sun, ChevronDown, Plus } from 'lucide-react';
+import { ShoppingCart, Moon, Sun, ChevronDown, Plus, Server, Activity } from 'lucide-react';
 import { GroceryList } from '../types';
 
 interface HeaderProps {
   activeList: GroceryList | null;
   onOpenListSelector: () => void;
   onOpenNewListModal: () => void;
+  onOpenConnectionModal: () => void;
+  isBackendConnected: boolean;
+  backendLabel: string;
   darkMode: boolean;
   onToggleDarkMode: () => void;
 }
@@ -14,6 +17,9 @@ export const Header: React.FC<HeaderProps> = ({
   activeList,
   onOpenListSelector,
   onOpenNewListModal,
+  onOpenConnectionModal,
+  isBackendConnected,
+  backendLabel,
   darkMode,
   onToggleDarkMode
 }) => {
@@ -40,7 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700/80 text-slate-800 dark:text-slate-200 text-sm font-medium transition-all"
             aria-label="Switch shopping list"
           >
-            <span className="truncate max-w-[140px] sm:max-w-[200px]">
+            <span className="truncate max-w-[120px] sm:max-w-[180px]">
               {activeList?.name || 'Loading list...'}
             </span>
             <span className="text-xs px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold">
@@ -59,14 +65,55 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </div>
 
-        {/* Right: Theme Toggle */}
-        <button
-          onClick={onToggleDarkMode}
-          className="p-2 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-        >
-          {darkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5" />}
-        </button>
+        {/* Right: Backend Connection Status & Theme Toggle */}
+        <div className="flex items-center gap-2">
+          {/* Backend Connection Status Pill */}
+          <button
+            type="button"
+            onClick={onOpenConnectionModal}
+            title="Click to view backend connection settings"
+            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+              isBackendConnected
+                ? 'border-emerald-200 dark:border-emerald-800/80 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
+                : 'border-amber-200 dark:border-amber-800/80 bg-amber-50/70 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/60'
+            }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isBackendConnected
+                  ? 'bg-emerald-500 animate-pulse'
+                  : 'bg-amber-500'
+              }`}
+            />
+            <span className="truncate max-w-[130px] font-mono text-[11px]">
+              {backendLabel}
+            </span>
+          </button>
+
+          {/* Mobile Server Icon Button */}
+          <button
+            type="button"
+            onClick={onOpenConnectionModal}
+            title="Backend Settings"
+            className={`sm:hidden p-2 rounded-lg border text-xs transition-colors ${
+              isBackendConnected
+                ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
+            }`}
+            aria-label="Backend Settings"
+          >
+            <Server className="w-4 h-4" />
+          </button>
+
+          {/* Theme Toggle */}
+          <button
+            onClick={onToggleDarkMode}
+            className="p-2 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {darkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
     </header>
   );

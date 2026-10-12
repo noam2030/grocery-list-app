@@ -9,6 +9,8 @@ import { BatchActionsBar } from './components/BatchActionsBar';
 import { EmptyState } from './components/EmptyState';
 import { CategoryBadge } from './components/CategoryBadge';
 import { DiagnosticBanner } from './components/DiagnosticBanner';
+import { ConnectionModal } from './components/ConnectionModal';
+import { api, DEFAULT_PRODUCTION_API_URL } from './api/client';
 import { AlertCircle, X, Loader2 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -23,6 +25,7 @@ export const App: React.FC = () => {
 
   const [isListModalOpen, setIsListModalOpen] = useState(false);
   const [listModalInitialCreate, setListModalInitialCreate] = useState(false);
+  const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
   const [isBannerDismissed, setIsBannerDismissed] = useState(false);
 
   const {
@@ -94,6 +97,9 @@ export const App: React.FC = () => {
           setListModalInitialCreate(true);
           setIsListModalOpen(true);
         }}
+        onOpenConnectionModal={() => setIsConnectionModalOpen(true)}
+        isBackendConnected={!isHtmlError && !isDemoMode && !error}
+        backendLabel={!isHtmlError && !isDemoMode && !error ? 'Cloud Run API' : 'Configure API'}
         darkMode={darkMode}
         onToggleDarkMode={() => setDarkMode((prev) => !prev)}
       />
@@ -119,6 +125,7 @@ export const App: React.FC = () => {
               refresh();
             }}
             onDismiss={() => setIsBannerDismissed(true)}
+            onOpenConnectionModal={() => setIsConnectionModalOpen(true)}
           />
         )}
 
@@ -231,6 +238,16 @@ export const App: React.FC = () => {
         onCreateList={createList}
         onDeleteList={deleteList}
         initialCreateMode={listModalInitialCreate}
+      />
+
+      {/* Backend API Connection Modal */}
+      <ConnectionModal
+        isOpen={isConnectionModalOpen}
+        onClose={() => setIsConnectionModalOpen(false)}
+        onConnected={() => {
+          setIsBannerDismissed(false);
+          refresh();
+        }}
       />
     </div>
   );

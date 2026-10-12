@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Server, Settings, CheckCircle2, XCircle, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
-import { api } from '../api/client';
+import { AlertTriangle, Server, Settings, CheckCircle2, XCircle, RefreshCw, ChevronDown, ChevronUp, Zap } from 'lucide-react';
+import { api, DEFAULT_PRODUCTION_API_URL } from '../api/client';
 
 interface DiagnosticBannerProps {
   isHtmlError: boolean;
@@ -9,6 +9,7 @@ interface DiagnosticBannerProps {
   onToggleDemoMode: () => void;
   onRetry: () => void;
   onDismiss: () => void;
+  onOpenConnectionModal?: () => void;
 }
 
 export const DiagnosticBanner: React.FC<DiagnosticBannerProps> = ({
@@ -17,12 +18,27 @@ export const DiagnosticBanner: React.FC<DiagnosticBannerProps> = ({
   isDemoMode,
   onToggleDemoMode,
   onRetry,
-  onDismiss
+  onDismiss,
+  onOpenConnectionModal
 }) => {
   const [showConfig, setShowConfig] = useState(false);
-  const [customUrl, setCustomUrl] = useState(() => api.getApiBaseUrl() || '');
+  const [customUrl, setCustomUrl] = useState(() => api.getApiBaseUrl() || DEFAULT_PRODUCTION_API_URL);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const handleConnectCloudRun = async () => {
+    setTesting(true);
+    api.setApiBaseUrl(DEFAULT_PRODUCTION_API_URL);
+    setCustomUrl(DEFAULT_PRODUCTION_API_URL);
+    const res = await api.checkHealth(DEFAULT_PRODUCTION_API_URL);
+    setTesting(false);
+    setTestResult({ ok: res.ok, message: res.message });
+    if (res.ok) {
+      setTimeout(() => {
+        onRetry();
+      }, 400);
+    }
+  };
 
   const handleTestAndSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,13 +106,35 @@ export const DiagnosticBanner: React.FC<DiagnosticBannerProps> = ({
         <div className="flex items-center gap-2 self-end sm:self-auto shrink-0 flex-wrap">
           <button
             type="button"
-            onClick={() => setShowConfig(!showConfig)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-200/80 hover:bg-amber-200 dark:bg-amber-900/50 dark:hover:bg-amber-900 text-amber-900 dark:text-amber-200 font-medium transition-colors"
+            onClick={handleConnectCloudRun}
+            disabled={testing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition-colors shadow-sm disabled:opacity-50"
+            title="Connect directly to deployed Cloud Run API"
           >
-            <Settings className="w-3.5 h-3.5" />
-            <span>Configure URL</span>
-            {showConfig ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            {testing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+            <span>Connect to Cloud Run</span>
           </button>
+
+          {onOpenConnectionModal ? (
+            <button
+              type="button"
+              onClick={onOpenConnectionModal}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-200/80 hover:bg-amber-200 dark:bg-amber-900/50 dark:hover:bg-amber-900 text-amber-900 dark:text-amber-200 font-medium transition-colors"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span>Settings</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowConfig(!showConfig)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-200/80 hover:bg-amber-200 dark:bg-amber-900/50 dark:hover:bg-amber-900 text-amber-900 dark:text-amber-200 font-medium transition-colors"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span>Configure URL</span>
+              {showConfig ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
+          )}
 
           <button
             type="button"

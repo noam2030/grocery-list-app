@@ -160,9 +160,9 @@ FIRESTORE_COLLECTION=grocery-list-app
 CORS_ORIGIN=*
 ```
 
-### Frontend (`frontend/.env`):
+### Frontend (`frontend/.env`, `frontend/.env.production`):
 ```ini
-VITE_API_URL=https://grocery-list-app-api-uc.a.run.app
+VITE_API_URL=https://grocery-list-app-api-bdxnar4rza-uc.a.run.app
 ```
 
 ---

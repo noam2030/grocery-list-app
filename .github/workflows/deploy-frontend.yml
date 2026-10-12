@@ -39,5 +39,14 @@ jobs:
 
       - name: Deploy grocery-list-app-ui to Vercel
         working-directory: ./frontend
-        run: vercel deploy --prod --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }} --yes
+        run: |
+          API_URL="${{ secrets.VITE_API_URL }}"
+          if [ -z "$API_URL" ]; then
+            API_URL="https://grocery-list-app-api-bdxnar4rza-uc.a.run.app"
+          fi
+          echo "Injecting production API URL: $API_URL"
+          echo "VITE_API_URL=$API_URL" > .env.production
+          echo "VITE_API_URL=$API_URL" > .env
+          vercel deploy --prod --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }} --yes --build-env VITE_API_URL="$API_URL"
+
 

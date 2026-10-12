@@ -93,6 +93,27 @@ class TestSpecAndWorkflowCompliance(unittest.TestCase):
             data = json.load(f)
         self.assertEqual(data.get("name"), "grocery-list-app-ui")
 
+    def test_vite_client_types_and_env_declaration(self):
+        """Verifies fix for Vercel TS2339 error: Property 'env' does not exist on type 'ImportMeta'."""
+        vite_env_dts = os.path.join(self.root_dir, "frontend", "src", "vite-env.d.ts")
+        self.assertTrue(os.path.exists(vite_env_dts), "frontend/src/vite-env.d.ts must exist")
+        with open(vite_env_dts, "r", encoding="utf-8") as f:
+            env_content = f.read()
+        self.assertIn('/// <reference types="vite/client" />', env_content)
+        self.assertIn("interface ImportMetaEnv", env_content)
+        self.assertIn("interface ImportMeta", env_content)
+
+        tsconfig_path = os.path.join(self.root_dir, "frontend", "tsconfig.json")
+        with open(tsconfig_path, "r", encoding="utf-8") as f:
+            tsconfig_content = f.read()
+        self.assertIn('"vite/client"', tsconfig_content, "frontend/tsconfig.json must include vite/client in types")
+
+        client_ts_path = os.path.join(self.root_dir, "frontend", "src", "api", "client.ts")
+        with open(client_ts_path, "r", encoding="utf-8") as f:
+            client_content = f.read()
+        self.assertIn("API_BASE", client_content)
+
+
 
 
 class MockInMemoryStore:

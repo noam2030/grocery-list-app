@@ -114,6 +114,7 @@ grocery-list-app/
     ├── index.html
     ├── .env.example
     └── src/
+        ├── vite-env.d.ts
         ├── api/
         │   └── client.ts
         ├── components/
@@ -273,9 +274,47 @@ app.listen(PORT, HOST, () => {
     ```
 - **Optimistic State Management**:
   - Toggling items immediately reflects in the UI. If the API request fails, state rolls back with an error toast notification.
-- **TypeScript & Build Hygiene**:
-  - In `frontend/tsconfig.json`, set `"skipLibCheck": true` to avoid third-party declaration mismatch failures during CI builds.
-  - Ensure all environment variables accessed on client use Vite's `import.meta.env.VITE_API_URL` with a resilient fallback to `http://localhost:8080`.
+- **TypeScript & Vite Environmental Typing (`import.meta.env`)**:
+  - To prevent TypeScript compile errors during `tsc && vite build` (such as `error TS2339: Property 'env' does not exist on type 'ImportMeta'`), the project MUST include `frontend/src/vite-env.d.ts` with Vite client type definitions:
+    ```typescript
+    /// <reference types="vite/client" />
+
+    interface ImportMetaEnv {
+      readonly VITE_API_URL?: string;
+    }
+
+    interface ImportMeta {
+      readonly env: ImportMetaEnv;
+    }
+    ```
+  - In `frontend/tsconfig.json`, include `"types": ["vite/client"]` under `compilerOptions` and set `"skipLibCheck": true`:
+    ```json
+    {
+      "compilerOptions": {
+        "target": "ES2020",
+        "useDefineForClassFields": true,
+        "lib": ["ES2020", "DOM", "DOM.Iterable"],
+        "module": "ESNext",
+        "skipLibCheck": true,
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": false,
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "noEmit": true,
+        "jsx": "react-jsx",
+        "strict": true,
+        "noUnusedLocals": false,
+        "noUnusedParameters": false,
+        "noFallthroughCasesInSwitch": true,
+        "types": ["vite/client"]
+      },
+      "include": ["src"]
+    }
+    ```
+  - In `src/api/client.ts`, safely read the environment variable:
+    ```typescript
+    const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/+$/, '');
+    ```
 
 ---
 
@@ -459,8 +498,9 @@ jobs:
 2. **Monorepo Directory Isolation**:
    - The frontend resides strictly in `frontend/`.
    - All Vercel CLI steps must execute with working directory set to `frontend/`.
-3. **TypeScript Build Guard**:
-   - Ensure `frontend/tsconfig.json` has `"skipLibCheck": true` and `"noEmitOnError": false` (or clean typing) so `npm run build` succeeds reliably.
+3. **TypeScript Build Guard & Vite Client Declarations**:
+   - Ensure `frontend/src/vite-env.d.ts` is committed and references `<reference types="vite/client" />`.
+   - Ensure `frontend/tsconfig.json` has `"types": ["vite/client"]` and `"skipLibCheck": true` so `tsc && vite build` succeeds without `Property 'env' does not exist on type 'ImportMeta'` errors.
 4. **Environment Variables**:
    - Pass `VITE_API_URL` during the `vercel build --prod` step so client bundles are compiled with the active Cloud Run API URL.
 5. **Clean Vercel Configuration (`frontend/vercel.json`)**:
@@ -545,6 +585,7 @@ jobs:
 | **Cloud Run**: *`Deploy failed: PORT env variable cannot be set.`* | Setting `PORT=8080` in `--set-env-vars`. | Remove `PORT` from `--set-env-vars`. Only pass the `--port 8080` CLI flag. |
 | **Cloud Run**: *`Buildpack command tsc: not found`* or buildpack exit code error. | TypeScript was placed in `devDependencies` and pruned during Cloud Build. | Place `typescript` and type declaration packages under `"dependencies"` in `backend/package.json`. |
 | **Cloud Run**: *`Permission denied`* during deployment. | GitHub secret `GCP_SA_KEY` missing Cloud Run or Cloud Build roles. | Grant `roles/run.admin`, `roles/iam.serviceAccountUser`, `roles/cloudbuild.builds.editor`, `roles/storage.admin`, and `roles/artifactregistry.admin` to the Service Account. |
+| **Vercel**: *`error TS2339: Property 'env' does not exist on type 'ImportMeta'`* during `npm run build` (`tsc && vite build`). | Missing Vite client type declarations in TypeScript compilation context. | 1. Create `frontend/src/vite-env.d.ts` with `/// <reference types="vite/client" />`.<br>2. Add `"types": ["vite/client"]` to `compilerOptions` in `frontend/tsconfig.json`.<br>3. Ensure `tsconfig.json` includes `"src"`. |
 | **Vercel**: *`Error: Project not found`* or *`Could not find project matching grocery-list-app-ui`*. | Missing project linkage or scope mismatch before `vercel pull`. | Run `npx vercel link --yes --project grocery-list-app-ui --scope noam-projects2 --token ...` before `vercel pull`. |
 | **Vercel**: *`Missing VERCEL_PROJECT_ID or VERCEL_ORG_ID`*. | GitHub Actions secrets not injected into environment. | Set `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` as step `env` variables in every Vercel command. |
 | **Vercel**: *`TypeScript error during build`* (`tsc && vite build`). | Strict type checking failing on library discrepancies. | Enable `"skipLibCheck": true` in `frontend/tsconfig.json`. |
@@ -564,6 +605,7 @@ jobs:
    - Add backend test suites and verify `npm test` passes.
 3. **Frontend Construction**:
    - Initialize Vite React TypeScript project in `frontend/`.
+   - Add `frontend/src/vite-env.d.ts` with `/// <reference types="vite/client" />` and configure `frontend/tsconfig.json` with `"types": ["vite/client"]` and `"skipLibCheck": true` to eliminate `Property 'env' does not exist on type 'ImportMeta'` errors.
    - Configure Tailwind CSS, Lucide icons, and `vercel.json` SPA rewrite rules.
    - Implement list switcher, category filters, item stepper, optimistic updates, and API client.
    - Add frontend unit tests and verify `npm test` passes.
@@ -571,7 +613,6 @@ jobs:
    - Write `.github/workflows/deploy-backend.yml` strictly following Google Cloud Run source-deploy constraints (source deploy, no docker, `--port 8080`, no PORT in `--set-env-vars`, targeting project `ai-learning-499409` and service `grocery-list-app-api`).
    - Write `.github/workflows/deploy-frontend.yml` strictly targeting Vercel team `noam-projects2` and project `grocery-list-app-ui` with explicit pre-linking (`vercel link`).
 5. **Final Review**: Validate that code, tests, and configuration directly mirror `SPEC.md`. Ensure all deployment failure vectors are eliminated.
-
 
 ---
 
@@ -601,3 +642,21 @@ The backend platform will automatically commit and publish your generated files 
 
 ### Prompt 2
 still, both deployments failed...
+
+### Prompt 3
+there is an error with deploying to vercel: Running "vercel build"
+Vercel CLI 62.7.0
+Installing dependencies...
+added 137 packages in 15s
+26 packages are looking for funding
+  run `npm fund` for details
+npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+npm warn install-scripts   esbuild@0.21.5 (postinstall: node install.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+Running "npm run build"
+> grocery-list-app-ui@1.0.0 build
+> tsc && vite build
+src/api/client.ts(3,30): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+src/api/client.ts(4,17): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+Error: Command "npm run build" exited with 2

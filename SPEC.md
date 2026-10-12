@@ -283,6 +283,38 @@ The `firestore.ts` module checks for Google Cloud environment or Application Def
 7. **`ListSelectorModal`**:
    - Modal for listing, creating, switching, and deleting shopping lists.
 
+### Single-Page Application (SPA) Resilience & Routing
+- `frontend/vercel.json` configures client-side rewrite rules to ensure refreshing any route serves `/index.html`:
+  ```json
+  {
+    "rewrites": [
+      { "source": "/(.*)", "destination": "/index.html" }
+    ]
+  }
+  ```
+
+### TypeScript & Vite Environment Typing (`import.meta.env`)
+- To prevent TypeScript compile errors during `tsc && vite build` (such as `error TS2339: Property 'env' does not exist on type 'ImportMeta'`), the project MUST include `frontend/src/vite-env.d.ts` declaring Vite client type references and environmental typing:
+  ```typescript
+  /// <reference types="vite/client" />
+
+  interface ImportMetaEnv {
+    readonly VITE_API_URL?: string;
+    [key: string]: any;
+  }
+
+  interface ImportMeta {
+    readonly env: ImportMetaEnv;
+  }
+  ```
+- In `frontend/tsconfig.json`, `compilerOptions` MUST include `"types": ["vite/client"]` and `"skipLibCheck": true` to ensure the TypeScript compiler recognizes Vite's global augmentations.
+- In `frontend/src/api/client.ts`, access to `import.meta.env` is safely guarded with runtime fallbacks:
+  ```typescript
+  const API_BASE = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL
+    ? ((import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL || '').replace(/\/+$/, '')
+    : '';
+  ```
+
 ---
 
 ## 8. Data Model
@@ -517,4 +549,16 @@ interface GroceryItem {
 7. **Failure Cause 7: Non-Interactive Prompting in `gcloud run deploy`**
    - *Problem*: `gcloud run deploy` in automated CI environments may block or fail when prompting to create Artifact Registry repositories or enable services if stdin is closed.
    - *Resolution*: Added the `--quiet` flag to `gcloud run deploy` to ensure headless, fully non-interactive execution.
+8. **Failure Cause 8: Vercel Build TS2339 Property 'env' does not exist on type 'ImportMeta'**
+   - *Problem*: During Vercel build (`tsc && vite build`), TypeScript compiler failed with:
+     ```
+     src/api/client.ts(3,30): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+     src/api/client.ts(4,17): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+     ```
+     This occurred because Vite's ambient client types (`vite/client`) were not linked in the TypeScript compiler context, and `frontend/src/vite-env.d.ts` was missing.
+   - *Resolution*:
+     1. Created `frontend/src/vite-env.d.ts` with `/// <reference types="vite/client" />` and explicit `ImportMeta` / `ImportMetaEnv` interface augmentation.
+     2. Configured `frontend/tsconfig.json` with `"types": ["vite/client"]` and `"skipLibCheck": true` under `compilerOptions`.
+     3. Hardened `frontend/src/api/client.ts` with safe environment variable resolution and defensive fallback.
+
 

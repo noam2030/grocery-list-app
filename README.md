@@ -59,6 +59,7 @@ grocery-list-app/
 │   └── tsconfig.json
 ├── frontend/
 │   ├── src/
+│   │   ├── vite-env.d.ts         # Vite client type definitions & ImportMeta typing
 │   │   ├── api/
 │   │   │   └── client.ts             # Fetch API client for backend
 │   │   ├── components/

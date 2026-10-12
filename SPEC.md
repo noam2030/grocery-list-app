@@ -474,10 +474,11 @@ interface GroceryItem {
 1. **Backend Unit & Integration Tests (`backend/tests/`)**:
    - `lists.test.ts`: List creation, default seeding, retrieval with item counts, cascading deletion.
    - `items.test.ts`: Item creation with validation, quantity stepper, completion toggle, aisle category filtering, search, batch clear.
-2. **Contract & Mock Storage Tests (`tests/api_contract_test.py`)**:
-   - Offline verification verifying all REST endpoints, headers, payload validation, and in-memory mock semantics without external dependencies.
+   - Authoritative Jest Configuration: Managed exclusively through `backend/jest.config.js` with `ts-jest` preset and explicit `--config jest.config.js` flag. The `"jest"` property is strictly omitted from `backend/package.json` to avoid Jest implicit multiple configurations conflict.
+2. **Contract & Mock Storage Tests (`tests/test_grocery_list_app.py`)**:
+   - Offline verification verifying all REST endpoints, headers, payload validation, workflow compliance, Jest single config compliance, and in-memory mock semantics without external dependencies.
 3. **Execution Commands**:
-   - Backend: `npm test` inside `backend/`
+   - Backend: `npm test` inside `backend/` (`jest --config jest.config.js --passWithNoTests`)
    - Frontend: `npm test` inside `frontend/`
    - Integration: `python3 -m unittest discover tests`
 
@@ -497,7 +498,7 @@ interface GroceryItem {
   - Trigger: `push` to `main` branch matching `backend/**`, `SPEC.md`, `package.json`, or workflow file, plus `workflow_dispatch`.
   - Condition: `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`
   - Dependency Installation: Uses `npm install` (avoiding `npm ci` failures due to uncommitted lockfiles)
-  - Testing Step: Configured with `jest.config.js` and `ts-jest` preset in `package.json` so `npm test` successfully compiles TypeScript test files without syntax errors.
+  - Testing Step: Configured with dedicated standalone `backend/jest.config.js` with `ts-jest` preset and explicit `--config jest.config.js` in `package.json` (with `"jest"` key removed from `package.json`) so `npm test` runs cleanly without multiple configuration resolution conflicts.
   - Deployment Command:
     ```bash
     gcloud run deploy grocery-list-app-api \
@@ -545,7 +546,7 @@ interface GroceryItem {
    - *Resolution*: Removed `--project` from `vercel deploy`. The project name `grocery-list-app-ui` is already specified in `frontend/vercel.json` and `frontend/package.json`, which Vercel CLI automatically reads when run within `./frontend`.
 6. **Failure Cause 6: Missing Jest TypeScript Configuration (`ts-jest`) in `backend/`**
    - *Problem*: `npm test` in `backend` failed during CI because Jest tried to run `items.test.ts` and `lists.test.ts` without a Jest config, causing `SyntaxError: Cannot use import statement outside a module`.
-   - *Resolution*: Added `backend/jest.config.js` and added `"jest": { "preset": "ts-jest", "testEnvironment": "node", "testMatch": ["**/*.test.ts"] }` to `backend/package.json`.
+   - *Resolution*: Added `backend/jest.config.js` with `ts-jest` preset.
 7. **Failure Cause 7: Non-Interactive Prompting in `gcloud run deploy`**
    - *Problem*: `gcloud run deploy` in automated CI environments may block or fail when prompting to create Artifact Registry repositories or enable services if stdin is closed.
    - *Resolution*: Added the `--quiet` flag to `gcloud run deploy` to ensure headless, fully non-interactive execution.
@@ -560,5 +561,19 @@ interface GroceryItem {
      1. Created `frontend/src/vite-env.d.ts` with `/// <reference types="vite/client" />` and explicit `ImportMeta` / `ImportMetaEnv` interface augmentation.
      2. Configured `frontend/tsconfig.json` with `"types": ["vite/client"]` and `"skipLibCheck": true` under `compilerOptions`.
      3. Hardened `frontend/src/api/client.ts` with safe environment variable resolution and defensive fallback.
+9. **Failure Cause 9: Multiple Jest Configurations Conflict (`jest.config.js` and `package.json` 'jest' key)**
+   - *Problem*: In GitHub Actions Cloud Run backend deployment step (`Run npm test`), Jest aborted with:
+     ```
+     ● Multiple configurations found:
+         * /home/runner/work/grocery-list-app/grocery-list-app/backend/jest.config.js
+         * `jest` key in /home/runner/work/grocery-list-app/grocery-list-app/backend/package.json
+       Implicit config resolution does not allow multiple configuration files.
+       Either remove unused config files or select one explicitly with `--config`.
+     ```
+     Jest does not permit both a standalone `jest.config.js` file and an inline `"jest"` object within `package.json` under implicit configuration discovery.
+   - *Resolution*:
+     1. Removed the `"jest"` key from `backend/package.json` to eliminate ambiguous duplicate configuration definitions.
+     2. Maintained the single authoritative `backend/jest.config.js` specifying the `ts-jest` preset, `tsconfig.json` transformation, and node environment.
+     3. Updated `backend/package.json` script `"test"` to explicitly pass `--config jest.config.js --passWithNoTests`, ensuring unambiguous execution across all environments.
 
 

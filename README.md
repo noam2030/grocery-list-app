@@ -221,10 +221,11 @@ vercel deploy --prod --scope noam-projects2 --token $VERCEL_TOKEN --yes
 
 ### CI/CD Deployment Troubleshooting & Fixes:
 1. **Vercel CLI `--project` Option Failure**: `vercel deploy` does not accept `--project` (which triggers `error: unknown option '--project'`). Project identity is determined by `"name": "grocery-list-app-ui"` defined in `frontend/vercel.json` and `frontend/package.json`.
-2. **Missing Jest TypeScript Configuration**: Configured `backend/jest.config.js` and `"jest"` in `backend/package.json` with `ts-jest` preset to prevent `SyntaxError: Cannot use import statement outside a module` during CI `npm test`.
+2. **Multiple Jest Configurations Conflict**: Jest fails when discovering multiple configs (`backend/jest.config.js` and `"jest"` key in `backend/package.json`). Centralized configuration exclusively in standalone `backend/jest.config.js` with `ts-jest` preset and explicit `--config jest.config.js` in `package.json`, completely removing the inline `"jest"` block to prevent ambiguous implicit resolution.
 3. **Cloud Run Headless Prompting**: Added `--quiet` to `gcloud run deploy` to prevent blocking on unhandled standard input in GitHub Actions runners.
 4. **GitHub Actions `npm ci` Failures**: Standardized on `npm install` across workflows to support environments without committed lockfiles.
 5. **Missing Vercel Org/Project ID Secrets**: Eliminated `vercel pull` and replaced with direct non-interactive `vercel deploy --prod --scope noam-projects2 --token ${{ secrets.VERCEL_TOKEN }} --yes`.
 6. **Cloud Run Buildpack Compilation**: Placed `typescript` in `dependencies` in `backend/package.json`, added `"gcp-build": "tsc"`, and provided a multi-stage `Dockerfile` and `.gcloudignore` for resilient source builds.
+7. **Vercel Build ImportMeta TS2339**: Created `frontend/src/vite-env.d.ts` and configured `frontend/tsconfig.json` with `types: ["vite/client"]` and hardened environment resolution in `frontend/src/api/client.ts`.
 
 

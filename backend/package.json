@@ -8,7 +8,7 @@
     "gcp-build": "tsc",
     "start": "node dist/server.js",
     "dev": "ts-node src/server.ts",
-    "test": "jest --passWithNoTests"
+    "test": "jest --config jest.config.js --passWithNoTests"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -31,13 +31,6 @@
     "supertest": "^7.0.0",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2"
-  },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/*.test.ts"
-    ]
   }
 }
 

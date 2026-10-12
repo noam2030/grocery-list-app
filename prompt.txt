@@ -18,7 +18,7 @@ You are tasked with building, testing, hardening, and deploying the complete, pr
    8. **Data Model**: Entities, Firestore collection structures, document schemas, field types, default values, and indexing rules.
    9. **API**: REST endpoints, request/response JSON payloads, query parameters, HTTP status codes, and standardized error schemas.
    10. **Configuration**: Environment variables, runtime ports, profiles, secrets management, and local fallback strategies.
-   11. **Testing**: Unit tests, integration tests, mock strategies for Firestore, component tests, and test runner configurations.
+   11. **Testing**: Unit tests, integration tests, mock strategies for Firestore, component tests, test runner configurations, and single-configuration discipline.
    12. **Deployment**: Target cloud environments, containerless source build commands, GitHub Actions workflows, build artifact layouts, Vercel project configuration, and Cloud Run troubleshooting/resilience practices.
 3. **Spec Alignment**: Every file created, route implemented, UI interaction, test suite, and CI/CD workflow step must strictly reflect and conform to `SPEC.md`. Any design or architectural update must be recorded in `SPEC.md` first.
 
@@ -63,6 +63,7 @@ You are tasked with building, testing, hardening, and deploying the complete, pr
   - Runtime: Node.js 20+ (TypeScript) with Express.
   - Cloud Database: Google Cloud Firestore (`@google-cloud/firestore`).
   - Validation: Zod for request body and query validation.
+  - Testing: Jest with `ts-jest` and `supertest` (or Vitest). Must maintain a single configuration source to prevent config collision.
   - Hosting: Google Cloud Run (Project: `ai-learning-499409`, Service Name: `grocery-list-app-api`, Region: `us-central1`).
 - **DevOps & CI/CD**:
   - GitHub Actions automated deployment workflows for backend (Google Cloud Run source deploy) and frontend (Vercel CLI).
@@ -81,6 +82,7 @@ grocery-list-app/
 │   ├── .gcloudignore
 │   ├── package.json
 │   ├── tsconfig.json
+│   ├── jest.config.js
 │   ├── .env.example
 │   ├── src/
 │   │   ├── config/
@@ -336,22 +338,48 @@ VITE_API_URL=https://grocery-list-app-api-XXXXXXXXXX-uc.a.run.app
 
 ---
 
-## 8. Automated Testing Requirements
+## 8. Automated Testing Requirements & Test Config Integrity
 
-- **Backend Tests**:
-  - Integration and unit tests using Vitest or Jest with `supertest`.
+### Backend Testing & Strict Single Test-Config Mandate:
+- **Zero Multiple-Config Conflict Rule**: Jest throws `● Multiple configurations found` and exits with code 1 if both a standalone config file (such as `jest.config.js`) AND a `"jest"` key in `backend/package.json` exist simultaneously.
+  - **Mandatory Enforcement**:
+    1. Maintain **only one** Jest configuration source. Use a dedicated `backend/jest.config.js`.
+    2. **DO NOT** include a `"jest"` key or block inside `backend/package.json`.
+    3. In `backend/package.json`, explicitly pass `--config jest.config.js` to the test command:
+       ```json
+       "scripts": {
+         "build": "tsc",
+         "start": "node dist/server.js",
+         "test": "jest --config jest.config.js --passWithNoTests"
+       }
+       ```
+    4. Provide a standard, robust `backend/jest.config.js`:
+       ```javascript
+       module.exports = {
+         preset: 'ts-jest',
+         testEnvironment: 'node',
+         testMatch: ['**/tests/**/*.test.ts'],
+         transform: {
+           '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.json' }]
+         },
+         verbose: true
+       };
+       ```
+- **Test Scenarios**:
+  - Integration and unit tests with `supertest`.
   - Comprehensive coverage of `/health`, `/api/lists`, `/api/items`, item patching, filtering, and completed item purging.
   - Tests must execute independently with mock Firestore / in-memory store without GCP credentials in CI.
-- **Frontend Tests**:
-  - Component tests using Vitest and React Testing Library.
-  - Validation of item addition, checkbox toggle, category filtering, and empty states.
-- Both `backend/package.json` and `frontend/package.json` must include an executable `npm test` script that passes cleanly in CI without network access.
+
+### Frontend Testing:
+- Component tests using Vitest (or Jest) and React Testing Library.
+- Validation of item addition, checkbox toggle, category filtering, and empty states.
+- Both `backend/package.json` and `frontend/package.json` must include an executable `npm test` script that passes cleanly in CI without network access or ambiguous configuration.
 
 ---
 
 ## 9. Deployment Architecture & CI/CD Pipelines
 
-Both backend and frontend deployments must be completely hardened against common buildpack, environment, and CLI pitfalls.
+Both backend and frontend deployments must be completely hardened against common buildpack, environment, test-runner, and CLI pitfalls.
 
 ### 1. Backend: Google Cloud Run Deployment
 - **Target Project**: `ai-learning-499409`
@@ -378,7 +406,7 @@ Both backend and frontend deployments must be completely hardened against common
    - The Express application **MUST** bind to host `0.0.0.0` (e.g., `app.listen(PORT, '0.0.0.0')`). If bound to `localhost` or `127.0.0.1`, Cloud Run container ingress cannot route traffic to the container and the deployment will fail with container health check timeouts.
 5. **Buildpack Compilation & Package Configuration (`backend/package.json`)**:
    - Cloud Run source deploy compiles via Google Cloud Buildpacks. TypeScript build tools (`typescript`, `@types/node`, `@types/express`, `@types/cors`) must be listed in `"dependencies"` (or ensure buildpacks do not prune them prior to compiling).
-   - In `backend/package.json`, provide robust build and execution scripts:
+   - Ensure `backend/package.json` contains no `"jest"` block when `jest.config.js` exists:
      ```json
      {
        "name": "grocery-list-app-backend",
@@ -386,7 +414,7 @@ Both backend and frontend deployments must be completely hardened against common
        "scripts": {
          "build": "tsc",
          "start": "node dist/server.js",
-         "test": "vitest run"
+         "test": "jest --config jest.config.js --passWithNoTests"
        },
        "dependencies": {
          "@google-cloud/firestore": "^7.11.0",
@@ -398,6 +426,13 @@ Both backend and frontend deployments must be completely hardened against common
          "@types/node": "^22.13.1",
          "@types/express": "^5.0.0",
          "@types/cors": "^2.8.17"
+       },
+       "devDependencies": {
+         "@types/jest": "^29.5.14",
+         "@types/supertest": "^6.0.2",
+         "jest": "^29.7.0",
+         "supertest": "^7.0.0",
+         "ts-jest": "^29.2.5"
        }
      }
      ```
@@ -581,6 +616,7 @@ jobs:
 
 | Failure Symptom | Underlying Cause | Mandatory Remedy |
 | :--- | :--- | :--- |
+| **Backend CI Test**: *`● Multiple configurations found: * jest.config.js * jest key in package.json. Implicit config resolution does not allow multiple configuration files.`* | Both a `jest.config.js` file and a `"jest"` key in `backend/package.json` exist simultaneously. | Maintain only a single configuration source: delete the `"jest"` block from `backend/package.json` in favor of `backend/jest.config.js`. In `backend/package.json`, set `"test": "jest --config jest.config.js --passWithNoTests"`. |
 | **Cloud Run**: *`Container failed to start. Failed to listen on PORT 8080 within timeout.`* | Server bound to `localhost` / `127.0.0.1` instead of `0.0.0.0`. | Explicitly call `app.listen(PORT, '0.0.0.0')` in `server.ts`. |
 | **Cloud Run**: *`Deploy failed: PORT env variable cannot be set.`* | Setting `PORT=8080` in `--set-env-vars`. | Remove `PORT` from `--set-env-vars`. Only pass the `--port 8080` CLI flag. |
 | **Cloud Run**: *`Buildpack command tsc: not found`* or buildpack exit code error. | TypeScript was placed in `devDependencies` and pruned during Cloud Build. | Place `typescript` and type declaration packages under `"dependencies"` in `backend/package.json`. |
@@ -595,14 +631,15 @@ jobs:
 
 ## 10. Execution Order & Verification
 
-1. **Author `SPEC.md`**: Create the comprehensive 12-section `SPEC.md` covering all features, data models, endpoints, build configurations, and deployment strategies.
+1. **Author `SPEC.md`**: Create the comprehensive 12-section `SPEC.md` covering all features, data models, endpoints, build configurations, test-runner configuration, and deployment strategies.
 2. **Backend Construction**:
-   - Create `backend/package.json`, `tsconfig.json`, and `.gcloudignore`.
+   - Create `backend/package.json`, `tsconfig.json`, `backend/jest.config.js`, and `.gcloudignore`.
+   - Strictly avoid defining a `"jest"` key in `backend/package.json` while `jest.config.js` is present; set `"test": "jest --config jest.config.js --passWithNoTests"`.
    - Ensure dependencies contain `typescript` and Express type packages to prevent buildpack compile failures.
    - Implement Express server with `0.0.0.0` host binding and port fallback `8080`.
    - Implement Firestore client targeting GCP project `ai-learning-499409` and collection `grocery-list-app`, with mock repository fallback.
    - Implement Express routes, Zod validation, and controllers.
-   - Add backend test suites and verify `npm test` passes.
+   - Add backend test suites and verify `npm test` passes without configuration collisions.
 3. **Frontend Construction**:
    - Initialize Vite React TypeScript project in `frontend/`.
    - Add `frontend/src/vite-env.d.ts` with `/// <reference types="vite/client" />` and configure `frontend/tsconfig.json` with `"types": ["vite/client"]` and `"skipLibCheck": true` to eliminate `Property 'env' does not exist on type 'ImportMeta'` errors.
@@ -612,7 +649,7 @@ jobs:
 4. **Deployments & Workflows**:
    - Write `.github/workflows/deploy-backend.yml` strictly following Google Cloud Run source-deploy constraints (source deploy, no docker, `--port 8080`, no PORT in `--set-env-vars`, targeting project `ai-learning-499409` and service `grocery-list-app-api`).
    - Write `.github/workflows/deploy-frontend.yml` strictly targeting Vercel team `noam-projects2` and project `grocery-list-app-ui` with explicit pre-linking (`vercel link`).
-5. **Final Review**: Validate that code, tests, and configuration directly mirror `SPEC.md`. Ensure all deployment failure vectors are eliminated.
+5. **Final Review**: Validate that code, tests, and configuration directly mirror `SPEC.md`. Ensure all deployment and CI failure vectors are eliminated.
 
 ---
 
@@ -660,3 +697,29 @@ Running "npm run build"
 src/api/client.ts(3,30): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
 src/api/client.ts(4,17): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
 Error: Command "npm run build" exited with 2
+
+### Prompt 4
+there is an error with deploying to cloudrun: Run npm test
+
+> grocery-list-app-api@1.0.0 test
+> jest --passWithNoTests
+
+● Multiple configurations found:
+
+    * /home/runner/work/grocery-list-app/grocery-list-app/backend/jest.config.js
+    * `jest` key in /home/runner/work/grocery-list-app/grocery-list-app/backend/package.json
+
+  Implicit config resolution does not allow multiple configuration files.
+  Either remove unused config files or select one explicitly with `--config`.
+
+  Configuration Documentation:
+  https://jestjs.io/docs/configuration
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /home/runner/work/grocery-list-app/grocery-list-app/backend
+npm error workspace grocery-list-app-api@1.0.0
+npm error location /home/runner/work/grocery-list-app/grocery-list-app/backend
+npm error command failed
+npm error command sh -c jest --passWithNoTests
+Error: Process completed with exit code 1.

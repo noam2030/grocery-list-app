@@ -113,6 +113,27 @@ class TestSpecAndWorkflowCompliance(unittest.TestCase):
             client_content = f.read()
         self.assertIn("API_BASE", client_content)
 
+    def test_jest_configuration_no_duplicate_conflict(self):
+        """Verifies fix for Jest multiple configurations conflict (jest.config.js vs package.json 'jest' key)."""
+        backend_pkg_path = os.path.join(self.root_dir, "backend", "package.json")
+        jest_config_path = os.path.join(self.root_dir, "backend", "jest.config.js")
+
+        self.assertTrue(os.path.exists(jest_config_path), "backend/jest.config.js must exist")
+        with open(jest_config_path, "r", encoding="utf-8") as f:
+            jest_config_content = f.read()
+        self.assertIn("ts-jest", jest_config_content, "jest.config.js must specify ts-jest preset")
+        self.assertIn("node", jest_config_content, "jest.config.js must specify node testEnvironment")
+
+        with open(backend_pkg_path, "r", encoding="utf-8") as f:
+            backend_pkg = json.load(f)
+
+        # Must NOT have inline "jest" key in package.json when jest.config.js exists
+        self.assertNotIn("jest", backend_pkg, "backend/package.json must not have 'jest' key to prevent multiple configurations conflict")
+
+        # Test script must explicitly specify --config jest.config.js
+        test_script = backend_pkg.get("scripts", {}).get("test", "")
+        self.assertIn("--config jest.config.js", test_script, "test script must explicitly specify --config jest.config.js")
+
 
 
 

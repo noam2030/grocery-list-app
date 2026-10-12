@@ -18,7 +18,7 @@ Authoritative system architecture and design specification for **grocery-list-ap
 - Aisle/category grouping to streamline physical store navigation.
 - High reliability with Google Cloud Firestore persistence and seamless local in-memory fallback for offline development.
 - Strikethrough completion toggling with batch cleanup of checked-off items.
-- Modern, accessible UI supporting both Light and Dark modes.
+- Modern, accessible UI defaulting to Dark theme for eye comfort, low-glare supermarket aisles, and battery conservation, with manual toggle to Light mode.
 
 ---
 
@@ -47,33 +47,44 @@ Authoritative system architecture and design specification for **grocery-list-ap
    - Status filters: All, Active, Completed.
    - Category filter pills.
    - Sorting options: By Aisle/Category, Alphabetical (A-Z), Priority (High to Low), Recently Added.
+5. **Theme & Visual Presentation**:
+   - Default View is Dark Theme: The application unconditionally renders in dark mode upon initial page visit.
+   - Zero-Flash Pre-Seeding: The root `<html>` document element is pre-seeded with `class="dark"` in `index.html`.
+   - Theme Toggle: Accessible theme switch in the header allowing immediate toggle between Dark and Light mode.
+   - Theme Persistence: Stored in browser `localStorage` under `grocery_theme` (with `freshcart_theme` backwards compatibility), defaulting strictly to `'dark'`.
 
 ### Non-Functional Requirements
 1. **Performance**: Sub-150ms backend response times for list and item CRUD operations; sub-16ms frontend UI rendering response.
 2. **Availability & Resilience**: Fully stateless backend deployable to Google Cloud Run; persistent storage in Google Cloud Firestore with zero local SQLite dependencies. In-memory fallback enables running offline without cloud credentials.
-3. **Usability & Accessibility**: Mobile-first responsive layout with tap targets $\ge 44 \times 44\text{ px}$. Full keyboard accessibility and WCAG AA color contrast ratios.
-4. **Reliability**: 100% test coverage for API endpoints, validation schemas, and state updates.
+3. **Usability & Accessibility**: Mobile-first responsive layout with tap targets $\ge 44 \times 44\text{ px}$. Full keyboard accessibility and WCAG AA color contrast ratios in both dark (default) and light modes.
+4. **Reliability**: 100% test coverage for API endpoints, validation schemas, theme defaults, and state updates.
 
 ---
 
 ## 3. User Experience
 
 ### Design System & Theme
+- **Default Dark Theme Architecture**:
+  - The default view for all users is Dark Theme (`class="dark"` on `document.documentElement`).
+  - Pre-seeded in `index.html` on the root `<html>` tag to eliminate any bright/white flash on initial load.
+  - Dedicated `useTheme` hook (`frontend/src/hooks/useTheme.ts`) inspects `localStorage.getItem('grocery_theme')` (and legacy `'freshcart_theme'`), defaulting strictly to `'dark'` when no preference exists.
+  - High-contrast, low-glare aesthetic specifically tailored for supermarket fluorescent lighting conditions, reducing battery drain on OLED mobile displays while shopping.
 - **Color Palette**:
   - Primary Accent: Fresh Emerald (`#059669` / `bg-emerald-600`) symbolizing fresh groceries.
-  - Neutral Background: Light (`#f8fafc` / `slate-50`), Dark (`#0f172a` / `slate-900`).
-  - Cards & Surfaces: Light (`#ffffff` / `bg-white`), Dark (`#1e293b` / `slate-800`).
+  - Neutral Background: Dark (`#0f172a` / `slate-900`) [Default], Light (`#f8fafc` / `slate-50`).
+  - Cards & Surfaces: Dark (`#1e293b` / `slate-800`) [Default], Light (`#ffffff` / `bg-white`).
+  - Typography: Dark Mode (`text-slate-100`, secondary `text-slate-400`), Light Mode (`text-slate-900`, secondary `text-slate-500`).
   - Category Badge Colors:
-    - Produce: Green (`bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300`)
-    - Dairy & Eggs: Amber/Yellow (`bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300`)
-    - Bakery: Orange (`bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300`)
-    - Meat & Seafood: Rose/Red (`bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300`)
-    - Pantry: Brown/Warm Gray (`bg-stone-100 text-stone-800 dark:bg-stone-900 dark:text-stone-300`)
-    - Frozen: Cyan/Sky (`bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300`)
-    - Beverages: Purple (`bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300`)
-    - Household: Slate/Indigo (`bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300`)
-    - Snacks: Pink (`bg-pink-100 text-pink-800 dark:bg-pink-950 dark:text-pink-300`)
-    - Other: Zinc (`bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300`)
+    - Produce: Green (`bg-emerald-950 text-emerald-300 dark:bg-emerald-950 dark:text-emerald-300` / light: `bg-emerald-100 text-emerald-800`)
+    - Dairy & Eggs: Amber/Yellow (`bg-amber-950 text-amber-300 dark:bg-amber-950 dark:text-amber-300` / light: `bg-amber-100 text-amber-800`)
+    - Bakery: Orange (`bg-orange-950 text-orange-300 dark:bg-orange-950 dark:text-orange-300` / light: `bg-orange-100 text-orange-800`)
+    - Meat & Seafood: Rose/Red (`bg-rose-950 text-rose-300 dark:bg-rose-950 dark:text-rose-300` / light: `bg-rose-100 text-rose-800`)
+    - Pantry: Brown/Warm Gray (`bg-stone-900 text-stone-300 dark:bg-stone-900 dark:text-stone-300` / light: `bg-stone-100 text-stone-800`)
+    - Frozen: Cyan/Sky (`bg-sky-950 text-sky-300 dark:bg-sky-950 dark:text-sky-300` / light: `bg-sky-100 text-sky-800`)
+    - Beverages: Purple (`bg-purple-950 text-purple-300 dark:bg-purple-950 dark:text-purple-300` / light: `bg-purple-100 text-purple-800`)
+    - Household: Slate/Indigo (`bg-indigo-950 text-indigo-300 dark:bg-indigo-950 dark:text-indigo-300` / light: `bg-indigo-100 text-indigo-800`)
+    - Snacks: Pink (`bg-pink-950 text-pink-300 dark:bg-pink-950 dark:text-pink-300` / light: `bg-pink-100 text-pink-800`)
+    - Other: Zinc (`bg-zinc-800 text-zinc-300 dark:bg-zinc-800 dark:text-zinc-300` / light: `bg-zinc-100 text-zinc-800`)
 
 ### Key User Flows
 1. **Selecting / Creating a List**:
@@ -166,7 +177,8 @@ grocery-list-app/
 │   │   │   ├── Header.tsx
 │   │   │   └── ListSelectorModal.tsx
 │   │   ├── hooks/
-│   │   │   └── useGroceryList.ts
+│   │   │   ├── useGroceryList.ts
+│   │   │   └── useTheme.ts
 │   │   ├── types/
 │   │   │   └── index.ts
 │   │   ├── App.tsx
@@ -354,6 +366,20 @@ The `firestore.ts` module checks for Google Cloud environment or Application Def
 - In `frontend/tsconfig.json`, `compilerOptions` MUST include `"types": ["vite/client"]` and `"skipLibCheck": true` to ensure the TypeScript compiler recognizes Vite's global augmentations.
 - In `frontend/src/api/client.ts`, access to `import.meta.env` is safely guarded with runtime fallbacks and `API_BASE` is exported.
 
+### Default Dark Theme Architecture (`frontend/src/hooks/useTheme.ts`)
+- **Default Dark Mode Initialization**:
+  - The application initializes in dark mode by default.
+  - Zero-flash HTML pre-seeding: `frontend/index.html` sets `<html lang="en" class="dark">` and `body` background `bg-slate-900 text-slate-100`.
+  - Tailwind configuration: `frontend/tailwind.config.js` specifies `darkMode: 'class'`.
+- **Theme Hook (`useTheme.ts`)**:
+  - Automatically loads theme from `localStorage.getItem('grocery_theme')` (with fallback to `freshcart_theme`).
+  - If no theme is saved in `localStorage`, it defaults strictly to `'dark'`.
+  - Applies or removes the `dark` class on `document.documentElement`.
+  - Persists updates to both `'grocery_theme'` and `'freshcart_theme'`.
+  - Exports `{ theme, darkMode, isDark, toggleTheme, setTheme }`.
+- **Header Theme Toggle**:
+  - `Header.tsx` renders a Sun icon when in dark mode (clicking switches to light mode) and a Moon icon when in light mode (clicking switches to dark mode).
+
 ---
 
 ## 8. Data Model
@@ -518,11 +544,12 @@ interface GroceryItem {
 | `VITE_API_URL` | Base URL of deployed Cloud Run backend API | `https://grocery-list-app-api-bdxnar4rza-uc.a.run.app` | `http://localhost:8080` |
 
 ### Runtime Frontend Configuration & Fallback Precedence
-1. **User Override**: If `grocery_api_url` or `freshcart_api_url` exists in `localStorage`, the UI directs all API requests to this target.
-2. **Build-Time Environment**: If `import.meta.env.VITE_API_URL` is set and non-empty, it is used.
-3. **Localhost Fallback**: If hostname is `localhost` or `127.0.0.1`, defaults to `http://localhost:8080`.
-4. **Authoritative Production Cloud Run Fallback**: Defaults to `DEFAULT_PRODUCTION_API_URL` (`https://grocery-list-app-api-bdxnar4rza-uc.a.run.app`). The frontend never makes relative API requests in production to prevent static host SPA rewrites returning HTML doctype documents.
-5. **Offline Demo Fallback**: If backend connection yields HTML or network failure, the application activates in-memory Demo Mode with full local CRUD capabilities.
+1. **Theme Preference**: Stored in `localStorage` key `grocery_theme` (with fallback reading from `freshcart_theme`). Defaults strictly to `'dark'`. Root `<html>` element is pre-seeded with `class="dark"` in `index.html`.
+2. **User Override**: If `grocery_api_url` or `freshcart_api_url` exists in `localStorage`, the UI directs all API requests to this target.
+3. **Build-Time Environment**: If `import.meta.env.VITE_API_URL` is set and non-empty, it is used.
+4. **Localhost Fallback**: If hostname is `localhost` or `127.0.0.1`, defaults to `http://localhost:8080`.
+5. **Authoritative Production Cloud Run Fallback**: Defaults to `DEFAULT_PRODUCTION_API_URL` (`https://grocery-list-app-api-bdxnar4rza-uc.a.run.app`). The frontend never makes relative API requests in production to prevent static host SPA rewrites returning HTML doctype documents.
+6. **Offline Demo Fallback**: If backend connection yields HTML or network failure, the application activates in-memory Demo Mode with full local CRUD capabilities.
 
 ---
 
@@ -537,6 +564,7 @@ interface GroceryItem {
    - Verifies all 12 mandatory sections in `SPEC.md`.
    - Validates Cloud Run source deployment workflow configuration and reserved `PORT` constraints.
    - Validates Vercel team `noam-projects2` and project name `grocery-list-app-ui` configuration.
+   - Validates default dark theme architecture: verifies `index.html` root `<html>` pre-seeds `class="dark"`, `tailwind.config.js` enables `darkMode: 'class'`, and `frontend/src/hooks/useTheme.ts` defaults strictly to `'dark'`.
    - Validates Vite client types, `ImportMetaEnv`, and defensive `API_BASE` export.
    - Validates HTML doctype detection and content-type parsing guard in `frontend/src/api/client.ts`.
    - Validates Vite dev server proxy configuration in `frontend/vite.config.ts`.

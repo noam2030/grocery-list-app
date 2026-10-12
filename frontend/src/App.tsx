@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useGroceryList } from './hooks/useGroceryList';
+import { useTheme } from './hooks/useTheme';
 import { Header } from './components/Header';
 import { ListSelectorModal } from './components/ListSelectorModal';
 import { AddItemForm } from './components/AddItemForm';
@@ -14,14 +15,7 @@ import { api, DEFAULT_PRODUCTION_API_URL } from './api/client';
 import { AlertCircle, X, Loader2 } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const [darkMode, setDarkMode] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('freshcart_theme');
-      if (stored) return stored === 'dark';
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    return false;
-  });
+  const { darkMode, toggleTheme } = useTheme();
 
   const [isListModalOpen, setIsListModalOpen] = useState(false);
   const [listModalInitialCreate, setListModalInitialCreate] = useState(false);
@@ -64,16 +58,6 @@ export const App: React.FC = () => {
     refresh
   } = useGroceryList();
 
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('freshcart_theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('freshcart_theme', 'light');
-    }
-  }, [darkMode]);
-
   const hasActiveFilters = statusFilter !== 'all' || categoryFilter !== 'all' || !!searchQuery.trim();
 
   const handleResetFilters = () => {
@@ -101,7 +85,7 @@ export const App: React.FC = () => {
         isBackendConnected={!isHtmlError && !isDemoMode && !error}
         backendLabel={!isHtmlError && !isDemoMode && !error ? 'Cloud Run API' : 'Configure API'}
         darkMode={darkMode}
-        onToggleDarkMode={() => setDarkMode((prev) => !prev)}
+        onToggleDarkMode={toggleTheme}
       />
 
       {/* Main Container */}

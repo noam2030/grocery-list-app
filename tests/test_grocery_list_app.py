@@ -218,6 +218,56 @@ class TestSpecAndWorkflowCompliance(unittest.TestCase):
             banner_content = f.read()
         self.assertIn("Connect to Cloud Run", banner_content)
 
+    def test_default_dark_theme_architecture(self):
+        """Verifies default dark theme configuration across HTML, Tailwind, Hook, and Components."""
+        # 1. SPEC.md verification
+        with open(self.spec_path, "r", encoding="utf-8") as f:
+            spec_content = f.read()
+        self.assertIn("Default View is Dark Theme", spec_content)
+        self.assertIn('class="dark"', spec_content)
+        self.assertIn("grocery_theme", spec_content)
+
+        # 2. HTML pre-seeding verification for zero-flash dark render
+        index_html_path = os.path.join(self.root_dir, "frontend", "index.html")
+        self.assertTrue(os.path.exists(index_html_path), "frontend/index.html must exist")
+        with open(index_html_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        self.assertIn('class="dark"', html_content, "index.html root <html> element must include class='dark' for default dark theme")
+        self.assertIn("bg-slate-900", html_content, "index.html body must include bg-slate-900 dark background")
+
+        # 3. Tailwind configuration
+        tailwind_config_path = os.path.join(self.root_dir, "frontend", "tailwind.config.js")
+        self.assertTrue(os.path.exists(tailwind_config_path), "frontend/tailwind.config.js must exist")
+        with open(tailwind_config_path, "r", encoding="utf-8") as f:
+            tw_content = f.read()
+        self.assertIn("darkMode: 'class'", tw_content, "tailwind.config.js must configure darkMode: 'class'")
+
+        # 4. useTheme hook existence and logic verification
+        use_theme_path = os.path.join(self.root_dir, "frontend", "src", "hooks", "useTheme.ts")
+        self.assertTrue(os.path.exists(use_theme_path), "frontend/src/hooks/useTheme.ts must exist")
+        with open(use_theme_path, "r", encoding="utf-8") as f:
+            theme_hook_content = f.read()
+        self.assertIn("useTheme", theme_hook_content)
+        self.assertIn("grocery_theme", theme_hook_content)
+        self.assertIn("'dark'", theme_hook_content)
+        self.assertIn("getInitialTheme", theme_hook_content)
+
+        # 5. App.tsx integration
+        app_tsx_path = os.path.join(self.root_dir, "frontend", "src", "App.tsx")
+        with open(app_tsx_path, "r", encoding="utf-8") as f:
+            app_content = f.read()
+        self.assertIn("useTheme", app_content, "App.tsx must import and use useTheme hook")
+        self.assertIn("toggleTheme", app_content, "App.tsx must wire toggleTheme to Header")
+
+        # 6. Header.tsx theme toggle support
+        header_path = os.path.join(self.root_dir, "frontend", "src", "components", "Header.tsx")
+        with open(header_path, "r", encoding="utf-8") as f:
+            header_content = f.read()
+        self.assertIn("darkMode", header_content)
+        self.assertIn("onToggleDarkMode", header_content)
+        self.assertIn("Sun", header_content)
+        self.assertIn("Moon", header_content)
+
 
 
 

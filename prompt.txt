@@ -10,11 +10,11 @@ You are tasked with building, testing, hardening, wiring, and deploying the comp
 2. **Mandatory Sections**: `SPEC.md` must contain exactly these 12 sections with zero omissions:
    1. **Overview**: Project purpose, target users, core shopping workflows, and value proposition.
    2. **Requirements**: Functional, non-functional, security, offline tolerance, and deployment requirements.
-   3. **User Experience**: Design system, visual hierarchy, mobile-first one-handed shopping flows, accessibility (WCAG 2.1 AA compliant), keyboard navigation, and theme system.
+   3. **User Experience**: Design system, visual hierarchy, dark theme as the default presentation, mobile-first one-handed shopping flows, accessibility (WCAG 2.1 AA compliant), keyboard navigation, and theme system (dark default with light toggle).
    4. **Architecture**: System architecture, monorepo directory layout, client-server contract, error propagation, network resilience, backend URL resolution hierarchy, and state management.
    5. **Technology Stack**: Specific frameworks, libraries, runtime versions, build tools, and justifications.
    6. **Backend**: Server runtime, framework, routing structure, middleware (CORS, body parsing, request logging), validation schemas, Firestore integration, and resilient error handling.
-   7. **Frontend**: UI framework, components, styling, client state, optimistic mutations, API client with multi-tier URL fallback and non-JSON/HTML response guard, interactive connection manager modal, fallback states, and toast notifications.
+   7. **Frontend**: UI framework, components, styling, client state, default dark theme styling, optimistic mutations, API client with multi-tier URL fallback and non-JSON/HTML response guard, interactive connection manager modal, fallback states, and toast notifications.
    8. **Data Model**: Entities, Firestore collection structures, document schemas, field types, default values, and indexing rules.
    9. **API**: REST endpoints, request/response JSON payloads, query parameters, HTTP status codes, and standardized error schemas.
    10. **Configuration**: Environment variables, runtime ports, profiles, secrets management, and local/production fallback strategies.
@@ -26,9 +26,14 @@ You are tasked with building, testing, hardening, wiring, and deploying the comp
 
 ## 2. Project Overview & Core Features
 
-**grocery-list-app** is a responsive, fast, intuitive grocery shopping and inventory management application designed for seamless in-store mobile use and desktop planning, with a live cloud connection to a Google Cloud Run API and Google Cloud Firestore.
+**grocery-list-app** is a responsive, fast, intuitive grocery shopping and inventory management application designed for seamless in-store mobile use and desktop planning, with default dark theme styling and a live cloud connection to a Google Cloud Run API and Google Cloud Firestore.
 
 ### Key Capabilities:
+- **Default Dark Theme & Visual Polish**:
+  - **Default View is Dark Theme**: The application initializes in dark mode by default (`class="dark"` applied to the root document on initial render).
+  - Modern, high-contrast dark aesthetic (slate/zinc dark backgrounds, vibrant accent badges, crisp typography) optimized for battery efficiency and low-glare grocery store aisles.
+  - Manual theme toggle in the header allowing users to switch between Dark and Light mode.
+  - Theme preference persisted in `localStorage` under key `grocery_theme` (defaulting to `'dark'` when no preference is saved).
 - **List & Item Management**:
   - Create, view, rename, and switch between multiple grocery lists (e.g., "Weekly Groceries", "Costco Run", "Dinner Party").
   - Auto-seed a default "Weekly Groceries" list when no lists exist.
@@ -49,7 +54,7 @@ You are tasked with building, testing, hardening, wiring, and deploying the comp
   - **Multi-Tier API URL Resolution Hierarchy**:
     1. `localStorage` custom override (`grocery_api_url`): Allows instant live updates from the UI without redeployment.
     2. Build-time environment variable `import.meta.env.VITE_API_URL`.
-    3. Production Default Fallback Cloud Run URL (`https://grocery-list-app-api-890259461427.us-central1.run.app` or project-determined Cloud Run URL).
+    3. Production Default Fallback Cloud Run URL (`https://grocery-list-app-api-bdxnar4rza-uc.a.run.app`).
     4. Local development fallback: `http://localhost:8080`.
   - **Connection Status & Diagnostic Manager**:
     - Live health badge in the UI header indicating connectivity status (`Connected`, `Checking...`, `Disconnected`).
@@ -58,7 +63,6 @@ You are tasked with building, testing, hardening, wiring, and deploying the comp
 - **User Experience & Responsiveness**:
   - Mobile-first, touch-friendly UI optimized for one-handed phone use in a grocery store aisle (minimum 44x44px touch targets).
   - Optimistic UI updates with toast notifications for actions, rollbacks, and network errors.
-  - Dark mode and light mode support with system preference detection and manual toggle.
 
 ---
 
@@ -67,7 +71,7 @@ You are tasked with building, testing, hardening, wiring, and deploying the comp
 ### Technology Stack:
 - **Frontend**:
   - Framework: React 18+ with TypeScript using Vite (`@vitejs/plugin-react`).
-  - Styling: Tailwind CSS with Lucide React icons.
+  - Styling: Tailwind CSS with Lucide React icons, configured with `darkMode: 'class'` and defaulted to dark theme.
   - State & Data Fetching: TanStack Query (React Query) or custom reactive hooks with optimistic cache updates.
   - Hosting: Vercel (Scope / Team: `noam-projects2`, Project Name: `grocery-list-app-ui`).
 - **Backend**:
@@ -142,7 +146,8 @@ grocery-list-app/
         │   └── ListSelector.tsx
         ├── hooks/
         │   ├── useConnection.ts
-        │   └── useGroceryList.ts
+        │   ├── useGroceryList.ts
+        │   └── useTheme.ts
         ├── types/
         │   └── index.ts
         ├── App.tsx
@@ -266,22 +271,46 @@ app.listen(PORT, HOST, () => {
 
 ---
 
-## 6. Frontend Specifications, API Connection Architecture & HTML Defense
+## 6. Frontend Specifications, Default Dark Theme & Connection Architecture
 
-### Preventing & Resolving the HTML Doctype / Unconnected Backend Issue:
+### 1. Default Dark Theme Architecture (`useTheme.ts`, `tailwind.config.js`, `index.html`):
+- **Tailwind Dark Mode**: In `tailwind.config.js`, configure `darkMode: 'class'`.
+- **HTML Document Pre-Seed**: In `frontend/index.html`, initialize the `<html>` element with class `dark` to guarantee zero-flash dark rendering:
+  ```html
+  <!doctype html>
+  <html lang="en" class="dark">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Grocery List App</title>
+    </head>
+    <body class="bg-slate-900 text-slate-100 min-h-screen">
+      <div id="root"></div>
+      <script type="module" src="/src/main.tsx"></script>
+    </body>
+  </html>
+  ```
+- **Theme Hook / Provider (`frontend/src/hooks/useTheme.ts`)**:
+  - Check `localStorage.getItem('grocery_theme')`.
+  - **Default to `'dark'`** if no item is stored (do NOT default to light or unhandled system preference).
+  - Apply or remove the `dark` class on `document.documentElement` based on current theme state.
+  - Expose `{ theme, toggleTheme, setTheme }` to components.
+  - The toggle button in `Header.tsx` reflects the active mode with Sun (when in dark mode, clicking switches to light) and Moon (when in light mode, clicking switches to dark) icons.
+
+### 2. Preventing & Resolving the HTML Doctype / Unconnected Backend Issue:
 In Single-Page Applications deployed on Vercel, requests to relative `/api/...` endpoints or requests when `VITE_API_URL` is empty trigger Vercel's SPA rewrite (`/(.*) -> /index.html`). Vercel returns `index.html` (which starts with `<!doctype html>`) with HTTP status 200. Calling `.json()` on this response produces:
 `Unexpected token '<', "<!doctype "... is not valid JSON`.
 
 To eliminate this entirely and ensure the UI is **always connected** to the deployed Cloud Run backend, implement the following multi-tier connection architecture.
 
-#### 1. Multi-Tier Backend URL Resolution (`frontend/src/api/client.ts`):
+#### Multi-Tier Backend URL Resolution (`frontend/src/api/client.ts`):
 Define a predictable production fallback pointing directly to the deployed Cloud Run service, alongside `localStorage` and `VITE_API_URL`:
 
 ```typescript
 // frontend/src/api/client.ts
 
-// Production Cloud Run default deployed URL for project ai-learning-499409 / service grocery-list-app-api
-export const DEFAULT_PRODUCTION_API_URL = 'https://grocery-list-app-api-890259461427.us-central1.run.app';
+// Verified production Cloud Run default deployed URL for project ai-learning-499409 / service grocery-list-app-api
+export const DEFAULT_PRODUCTION_API_URL = 'https://grocery-list-app-api-bdxnar4rza-uc.a.run.app';
 
 export function getApiBaseUrl(): string {
   // 1. Manual runtime override saved in browser storage
@@ -372,7 +401,7 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {})
 }
 ```
 
-#### 2. Interactive Backend Connection Modal & Diagnostic UI (`ConnectionModal.tsx`):
+#### 3. Interactive Backend Connection Modal & Diagnostic UI (`ConnectionModal.tsx`):
 - Provide a dedicated, accessible `ConnectionModal` component in the frontend.
 - Allow users to:
   1. See the currently active API Base URL.
@@ -384,8 +413,8 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {})
   - Green dot: "Connected" (shows tooltip with backend URL).
   - Amber/Red dot: "Disconnected" (clicking opens `ConnectionModal`).
 
-#### 3. Component Hierarchy & UX:
-- `Header`: App branding, active list selector dropdown, modal trigger for new list, theme toggle (dark/light), interactive backend health status badge with connection settings trigger.
+#### 4. Component Hierarchy & UX:
+- `Header`: App branding, active list selector dropdown, modal trigger for new list, theme toggle button (defaulting to dark mode, switching to light mode with instant visual update), interactive backend health status badge with connection settings trigger.
 - `ConnectionModal`: Modal dialog to inspect, test, and update backend API URL in `localStorage`.
 - `FilterBar`: Search input with quick clear, category filter pills, status filter tabs (`All`, `Active`, `Done`), sort dropdown.
 - `AddItemForm`: Quick item entry with instant category inference based on item name keywords, quantity stepper, unit selector, priority picker.
@@ -398,7 +427,7 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {})
 - `BatchActionsBar`: Appears when completed items exist, showing item count and a "Clear Completed" button.
 - `EmptyState`: Contextual feedback for empty lists or zero search results.
 
-#### 4. TypeScript & Vite Environmental Typing (`import.meta.env`):
+#### 5. TypeScript & Vite Environmental Typing (`import.meta.env`):
 - To prevent TypeScript compile errors during `tsc && vite build` (such as `error TS2339: Property 'env' does not exist on type 'ImportMeta'`), the project MUST include `frontend/src/vite-env.d.ts` with Vite client type definitions:
   ```typescript
   /// <reference types="vite/client" />
@@ -436,7 +465,7 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {})
   }
   ```
 
-#### 5. Vercel Routing Configuration (`frontend/vercel.json`):
+#### 6. Vercel Routing Configuration (`frontend/vercel.json`):
 ```json
 {
   "rewrites": [
@@ -458,9 +487,9 @@ FIRESTORE_COLLECTION=grocery-list-app
 CORS_ORIGIN=*
 ```
 
-### Frontend Configuration (`frontend/.env.example`):
+### Frontend Configuration (`frontend/.env.example` and `frontend/.env.production`):
 ```ini
-VITE_API_URL=https://grocery-list-app-api-890259461427.us-central1.run.app
+VITE_API_URL=https://grocery-list-app-api-bdxnar4rza-uc.a.run.app
 ```
 
 ---
@@ -499,6 +528,8 @@ VITE_API_URL=https://grocery-list-app-api-890259461427.us-central1.run.app
 
 ### Frontend Testing:
 - Component tests using Vitest (or Jest) and React Testing Library.
+- Test that the app defaults to dark theme when no `grocery_theme` entry exists in `localStorage`, adding the `dark` class to `document.documentElement`.
+- Test theme toggling between dark and light modes with proper persistence.
 - Test that `apiRequest` handles JSON responses normally, falls back to `DEFAULT_PRODUCTION_API_URL` when `VITE_API_URL` is unset, and throws a descriptive error when an HTML string or Doctype is encountered.
 - Test that `ConnectionModal` persists the custom URL to `localStorage` and triggers connection re-checks.
 - Both `backend/package.json` and `frontend/package.json` must include an executable `npm test` script that passes cleanly in CI without network access or ambiguous configuration.
@@ -669,7 +700,7 @@ jobs:
    - Ensure `frontend/src/vite-env.d.ts` is committed and references `<reference types="vite/client" />`.
    - Ensure `frontend/tsconfig.json` has `"types": ["vite/client"]` and `"skipLibCheck": true` so `tsc && vite build` succeeds without `Property 'env' does not exist on type 'ImportMeta'` errors.
 4. **Resilient VITE_API_URL Injection**:
-   - During `vercel build --prod`, inject `VITE_API_URL`. If `secrets.VITE_API_URL` is empty, fallback directly to the known Cloud Run URL (`https://grocery-list-app-api-890259461427.us-central1.run.app`) to ensure production builds are baked with the live Cloud Run backend URL.
+   - During `vercel build --prod`, inject `VITE_API_URL`. If `secrets.VITE_API_URL` is empty, fallback directly to the known live Cloud Run URL (`https://grocery-list-app-api-bdxnar4rza-uc.a.run.app`) to ensure production builds are baked with the live Cloud Run backend URL.
 5. **Clean Vercel Configuration (`frontend/vercel.json`)**:
    ```json
    {
@@ -732,7 +763,7 @@ jobs:
         run: |
           API_URL="${{ secrets.VITE_API_URL }}"
           if [ -z "$API_URL" ]; then
-            API_URL="https://grocery-list-app-api-890259461427.us-central1.run.app"
+            API_URL="https://grocery-list-app-api-bdxnar4rza-uc.a.run.app"
           fi
           echo "Using VITE_API_URL: $API_URL"
           VITE_API_URL="$API_URL" npx vercel build --prod --token ${{ secrets.VERCEL_TOKEN }} --scope noam-projects2
@@ -753,7 +784,8 @@ jobs:
 
 | Failure Symptom | Underlying Cause | Mandatory Remedy |
 | :--- | :--- | :--- |
-| **Frontend UI Runtime**: *`Unexpected token '<', "<!doctype "... is not valid JSON`* or *`Backend API Connection Notice (HTML Response Intercepted)`* | Client fetch requested an unhandled relative path or `VITE_API_URL` was unset/empty in production. Vercel SPA rewrite returned `index.html` with HTTP 200 instead of backend JSON. | 1. Implement multi-tier fallback in `getApiBaseUrl()`: check `localStorage.getItem('grocery_api_url')`, then `VITE_API_URL`, then `DEFAULT_PRODUCTION_API_URL` (`https://grocery-list-app-api-890259461427.us-central1.run.app`).<br>2. Provide interactive `ConnectionModal` in the UI to allow 1-click test & connection to the live Cloud Run backend.<br>3. Inspect `Content-Type` before parsing JSON and intercept Doctype responses. |
+| **Frontend UI Runtime**: *`Unexpected token '<', "<!doctype "... is not valid JSON`* or *`Backend API Connection Notice (HTML Response Intercepted)`* | Client fetch requested an unhandled relative path or `VITE_API_URL` was unset/empty in production. Vercel SPA rewrite returned `index.html` with HTTP 200 instead of backend JSON. | 1. Implement multi-tier fallback in `getApiBaseUrl()`: check `localStorage.getItem('grocery_api_url')`, then `VITE_API_URL`, then `DEFAULT_PRODUCTION_API_URL` (`https://grocery-list-app-api-bdxnar4rza-uc.a.run.app`).<br>2. Provide interactive `ConnectionModal` in the UI to allow 1-click test & connection to the live Cloud Run backend.<br>3. Inspect `Content-Type` before parsing JSON and intercept Doctype responses. |
+| **Theme / Display**: App flashes light background on initial load or fails to render dark mode by default. | Missing `dark` class on root HTML element or theme state initializes to light. | Pre-seed `class="dark"` on `<html>` in `frontend/index.html`. Initialize `useTheme` hook with default `'dark'` when `localStorage.getItem('grocery_theme')` is absent. |
 | **Backend CI Test**: *`● Multiple configurations found: * jest.config.js * jest key in package.json. Implicit config resolution does not allow multiple configuration files.`* | Both a `jest.config.js` file and a `"jest"` key in `backend/package.json` exist simultaneously. | Maintain only a single configuration source: delete the `"jest"` block from `backend/package.json` in favor of `backend/jest.config.js`. In `backend/package.json`, set `"test": "jest --config jest.config.js --passWithNoTests"`. |
 | **Cloud Run**: *`Container failed to start. Failed to listen on PORT 8080 within timeout.`* | Server bound to `localhost` / `127.0.0.1` instead of `0.0.0.0`. | Explicitly call `app.listen(PORT, '0.0.0.0')` in `server.ts`. |
 | **Cloud Run**: *`Deploy failed: PORT env variable cannot be set.`* | Setting `PORT=8080` in `--set-env-vars`. | Remove `PORT` from `--set-env-vars`. Only pass the `--port 8080` CLI flag. |
@@ -769,7 +801,7 @@ jobs:
 
 ## 10. Execution Order & Verification
 
-1. **Author `SPEC.md`**: Create the comprehensive 12-section `SPEC.md` covering all features, data models, endpoints, build configurations, test-runner configuration, response verification defense, connection hierarchy, and deployment strategies.
+1. **Author `SPEC.md`**: Create the comprehensive 12-section `SPEC.md` covering all features, data models, endpoints, build configurations, default dark theme presentation, test-runner configuration, response verification defense, connection hierarchy, and deployment strategies.
 2. **Backend Construction**:
    - Create `backend/package.json`, `tsconfig.json`, `backend/jest.config.js`, and `.gcloudignore`.
    - Strictly avoid defining a `"jest"` key in `backend/package.json` while `jest.config.js` is present; set `"test": "jest --config jest.config.js --passWithNoTests"`.
@@ -780,16 +812,17 @@ jobs:
    - Add backend test suites and verify `npm test` passes without configuration collisions.
 3. **Frontend Construction**:
    - Initialize Vite React TypeScript project in `frontend/`.
+   - Set up Tailwind CSS with `darkMode: 'class'`, and ensure `index.html` has `class="dark"` on the root `<html>` tag.
+   - Implement `useTheme` hook with dark theme as the guaranteed default, persisting toggles to `localStorage` under `grocery_theme`.
    - Add `frontend/src/vite-env.d.ts` with `/// <reference types="vite/client" />` and configure `frontend/tsconfig.json` with `"types": ["vite/client"]` and `"skipLibCheck": true`.
-   - Implement defensive `src/api/client.ts` with multi-tier URL resolution (`localStorage` -> `VITE_API_URL` -> `DEFAULT_PRODUCTION_API_URL` -> localhost), checking `Content-Type: application/json` and detecting HTML Doctype fallbacks.
+   - Implement defensive `src/api/client.ts` with multi-tier URL resolution (`localStorage` -> `VITE_API_URL` -> `DEFAULT_PRODUCTION_API_URL` [`https://grocery-list-app-api-bdxnar4rza-uc.a.run.app`] -> localhost), checking `Content-Type: application/json` and detecting HTML Doctype fallbacks.
    - Build `ConnectionModal.tsx` and interactive status indicator in `Header.tsx` allowing users to view, test (`/health`), and persist the Cloud Run endpoint directly in the browser.
-   - Configure Tailwind CSS, Lucide icons, and `vercel.json` SPA rewrite rules.
    - Implement list switcher, category filters, item stepper, optimistic updates, and diagnostic banners.
-   - Add frontend unit tests verifying JSON parsing, URL fallback resolution, and rejection of HTML responses.
+   - Add frontend unit tests verifying default dark theme activation, JSON parsing, URL fallback resolution, and rejection of HTML responses.
 4. **Deployments & Workflows**:
    - Write `.github/workflows/deploy-backend.yml` strictly following Google Cloud Run source-deploy constraints (source deploy, no docker, `--port 8080`, no PORT in `--set-env-vars`, targeting project `ai-learning-499409` and service `grocery-list-app-api`). Verify URL output.
    - Write `.github/workflows/deploy-frontend.yml` strictly targeting Vercel team `noam-projects2` and project `grocery-list-app-ui` with explicit pre-linking (`vercel link`) and automated fallback injection of the live Cloud Run backend URL during `vercel build --prod`.
-5. **Final Review**: Validate that code, tests, and configuration directly mirror `SPEC.md`. Ensure all deployment, connection, and runtime failure vectors are eliminated.
+5. **Final Review**: Validate that code, tests, and configuration directly mirror `SPEC.md`. Ensure dark theme defaults cleanly across the entire UI and all deployment, connection, and runtime failure vectors are eliminated.
 
 ---
 
@@ -812,3 +845,6 @@ jobs:
 - Discovered live Cloud Run URL: `https://grocery-list-app-api-bdxnar4rza-uc.a.run.app` serving `/health` and `/api/lists` successfully in project `ai-learning-499409`.
 - Resolved disconnection by setting `DEFAULT_PRODUCTION_API_URL` to the verified live service `https://grocery-list-app-api-bdxnar4rza-uc.a.run.app`, providing `.env.production`, integrating `ConnectionModal.tsx`, updating `Header.tsx` with live health pill, and enhancing GitHub Actions deployment workflow.
 
+### Prompt 5: Default View as Dark Theme
+- Updated visual specifications and frontend theme architecture so the default view is dark theme across the application.
+- Configured root HTML document pre-seeding (`class="dark"`), Tailwind dark mode class strategy, and `useTheme` hook to initialize dark mode automatically while retaining manual toggle to light mode.

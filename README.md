@@ -15,7 +15,7 @@ A modern, responsive, full-stack grocery shopping and inventory management appli
 - **Aisle & Supermarket Organization**: 10 default department categories with color badges. Easily toggle between **Grouped Aisle View** (organized by department) and **Flat List View**.
 - **Real-Time Search & Filters**: Instant search across item names and notes, with status tabs (`All`, `Active`, `Completed`) and horizontal department chips.
 - **Progress Tracking & Batch Cleanup**: Live counter and progress bar showing completed items. One-click "Clear Completed" button.
-- **Optimistic UI & Dark Mode**: Instant tap response with rollback on network errors; Dark and Light mode support.
+- **Default Dark Theme & Optimistic UI**: The default view is Dark Theme, optimized for low-glare supermarket aisles and OLED battery conservation, with zero-flash pre-seeding in HTML and seamless manual toggle to Light mode; instant tap response with optimistic cache updates.
 - **Robust Cloud Persistence**: Stores lists and items in Google Cloud Firestore using Application Default Credentials (ADC) on Cloud Run, with an in-memory fallback for local offline testing.
 
 ---
@@ -73,7 +73,8 @@ grocery-list-app/
 │   │   │   ├── Header.tsx            # App bar, list dropdown & dark mode
 │   │   │   └── ListSelectorModal.tsx # Multi-list modal manager
 │   │   ├── hooks/
-│   │   │   └── useGroceryList.ts     # State management & optimistic updates
+│   │   │   ├── useGroceryList.ts     # State management & optimistic updates
+│   │   │   └── useTheme.ts           # Dark theme default & toggle hook
 │   │   ├── types/
 │   │   │   └── index.ts              # Data contracts & category definitions
 │   │   ├── App.tsx                   # Main layout & view switching
